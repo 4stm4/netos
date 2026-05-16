@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import select
+import shutil
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+from targets import TARGETS, TargetConfig, get_target
+
+
+PROJECT_ROOT = Path(__file__).parent.parent
+KERNEL_IMAGE = PROJECT_ROOT / "temp" / "rpi_linux" / "arch" / "arm64" / "boot" / "Image"
+DEFAULT_READY_MARKERS = {"OVSDB_STARTED", "OVS_VSWITCHD_STARTED", "NET_AGENT_STARTED"}
+
+
+def run_checked(cmd: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+
+def require_artifacts(target: TargetConfig):
+    image_path = PROJECT_ROOT / target.image_name
+    missing = []
+    if not image_path.exists():
+        missing.append(str(image_path))
+    if not KERNEL_IMAGE.exists():
+        missing.append(str(KERNEL_IMAGE))
+    if missing:
+        raise FileNotFoundError(
+            "Не найдены артефакты для запуска QEMU:\n"
+            + "\n".join(f"  - {path}" for path in missing)
+            + f"\nСоберите их на Linux: python3 src/main.py --target {target.name}"
+        )
+    return image_path
+
+
+def qemu_machine_supported(qemu_bin: str, machine: str) -> bool:
+    result = run_checked([qemu_bin, "-machine", "help"])
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "Не удалось получить список QEMU machine")
+    return any(line.split(maxsplit=1)[0] == machine for line in result.stdout.splitlines() if line.strip())
+
+
+def build_qemu_cmd(target: TargetConfig, qemu_bin: str, image_path: Path, host_port: int):
+    if not target.qemu_supported:
+        raise RuntimeError(
+            f"Target {target.name} не имеет QEMU-конфигурации. "
+            "Pi 5/BCM2712 в текущем QEMU не эмулируется."
+        )
+
+    if not qemu_machine_supported(qemu_bin, target.qemu_machine):
+        raise RuntimeError(f"QEMU binary {qemu_bin} не поддерживает machine={target.qemu_machine}")
+
+    cmd = [
+        qemu_bin,
+        "-M", target.qemu_machine,
+        "-cpu", target.qemu_cpu or "max",
+        "-m", "1024",
+        "-kernel", str(KERNEL_IMAGE),
+        "-drive", f"file={image_path},format=raw,if=virtio",
+        "-append", target.boot_cmdline,
+        "-netdev", f"user,id=net0,hostfwd=tcp:127.0.0.1:{host_port}-127.0.0.1:6640",
+        "-device", "virtio-net-pci,netdev=net0",
+        "-serial", "stdio",
+        "-display", "none",
+        "-no-reboot",
+    ]
+    return cmd
+
+
+def wait_for_qemu(cmd: list[str], host_port: int, timeout: int, markers: set[str], skip_tcp_check: bool):
+    print("Запускаем QEMU:")
+    print("$ " + " ".join(cmd))
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    seen = set()
+    start = time.time()
+
+    try:
+        assert proc.stdout is not None
+        while True:
+            if time.time() - start > timeout:
+                raise TimeoutError(f"Таймаут {timeout}s ожидания маркеров: {sorted(markers)}")
+            if proc.poll() is not None:
+                return proc.returncode
+
+            ready, _, _ = select.select([proc.stdout], [], [], 1)
+            if not ready:
+                continue
+
+            line = proc.stdout.readline()
+            if not line:
+                continue
+            print(line, end="")
+            for marker in markers:
+                if marker in line:
+                    seen.add(marker)
+
+            if "Kernel panic" in line:
+                raise RuntimeError("Kernel panic в гостевой системе")
+
+            if seen == markers:
+                if skip_tcp_check:
+                    return 0
+                with socket.create_connection(("127.0.0.1", host_port), timeout=5):
+                    print(f"QEMU: ovsdb-server доступен на 127.0.0.1:{host_port}")
+                    return 0
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description="Run a Litainer image in QEMU")
+    parser.add_argument("--target", choices=sorted(TARGETS), default="qemu-virt")
+    parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--host-port", type=int, default=6640)
+    parser.add_argument("--skip-tcp-check", action="store_true")
+    parser.add_argument("--qemu-bin", default=os.environ.get("QEMU_BIN", "qemu-system-aarch64"))
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
+    target = get_target(args.target)
+    qemu_bin = shutil.which(args.qemu_bin) or args.qemu_bin
+
+    if not target.qemu_supported:
+        raise RuntimeError(
+            f"Target {target.name} не имеет QEMU-конфигурации. "
+            "Pi 5/BCM2712 в текущем QEMU не эмулируется; используйте --target qemu-virt."
+        )
+
+    image_path = require_artifacts(target)
+    cmd = build_qemu_cmd(target, qemu_bin, image_path, args.host_port)
+    return wait_for_qemu(cmd, args.host_port, args.timeout, DEFAULT_READY_MARKERS, args.skip_tcp_check)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as exc:
+        print(f"ОШИБКА: {exc}", file=sys.stderr)
+        sys.exit(1)

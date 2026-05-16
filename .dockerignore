@@ -1,9 +1,0 @@
-temp
-container
-raspi.img
-__pycache__
-*.pyc
-*.pyo
-*.log
-.git
-.gitignore

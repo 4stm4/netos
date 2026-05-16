@@ -74,7 +74,9 @@ class FileAdapter(FileSystemPort):
         """
         if clear_path.exists():
             for item in clear_path.iterdir():
-                if item.is_dir():
+                # Не спускаемся в симлинки как в каталоги — удаляем их как файлы,
+                # чтобы избежать ошибок вида "Not a directory".
+                if item.is_dir() and not item.is_symlink():
                     self._clear_container_directory(item)
                 else:
                     item.unlink()

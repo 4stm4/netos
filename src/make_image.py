@@ -1,33 +1,61 @@
+import argparse
 import os
 import subprocess
 from pathlib import Path
+from typing import Union
+
+from targets import TARGETS, TargetConfig, get_target
 
 IMG_SIZE_MB = 2048  # Размер образа в мегабайтах
-IMG_NAME = "raspi.img"
 BOOT_SIZE_MB = 256  # Размер boot-раздела
 
 PROJECT_ROOT = Path(__file__).parent.parent
 CONTAINER_PATH = PROJECT_ROOT / "container"
+BOOT_SRC_PATH = CONTAINER_PATH / "boot"
 TEMP_PATH = PROJECT_ROOT / "temp"
-IMG_PATH = PROJECT_ROOT / IMG_NAME
 
 BOOT_MNT = TEMP_PATH / "mnt_boot"
 ROOTFS_MNT = TEMP_PATH / "mnt_rootfs"
 
-# Пути к файлам ядра и конфигам (замените на свои при необходимости)
-KERNEL_IMAGE = TEMP_PATH / "rpi_linux" / "arch/arm64/boot/Image"
-DTB_DIR = TEMP_PATH / "rpi_linux" / "arch/arm64/boot/dts"
 CONFIG_TXT = TEMP_PATH / "config.txt"
 CMDLINE_TXT = TEMP_PATH / "cmdline.txt"
 
-def run(cmd):
-    print(f"$ {' '.join(str(x) for x in cmd)}")
-    subprocess.run(cmd, check=True)
+def _command(cmd, use_sudo=False):
+    resolved = [str(arg) for arg in cmd]
+    if use_sudo and os.geteuid() != 0:
+        return ["sudo", *resolved]
+    return resolved
 
-def create_img():
+
+def run(cmd, input_data=None, use_sudo=False):
+    resolved = _command(cmd, use_sudo)
+    print(f"$ {' '.join(resolved)}")
+    subprocess.run(resolved, check=True, input=input_data, text=isinstance(input_data, str))
+
+
+def check_output(cmd, use_sudo=False):
+    resolved = _command(cmd, use_sudo)
+    return subprocess.check_output(resolved, text=True)
+
+
+def _resolve_target(target: Union[str, TargetConfig]) -> TargetConfig:
+    if isinstance(target, TargetConfig):
+        return target
+    return get_target(target)
+
+
+def create_img(target: Union[str, TargetConfig] = "pi5"):
+    target = _resolve_target(target)
+    img_path = PROJECT_ROOT / target.image_name
+    boot_loop = None
+    root_loop = None
+    mounted = []
+
     TEMP_PATH.mkdir(parents=True, exist_ok=True)
-    print(f"Создаём пустой образ {IMG_PATH} размером {IMG_SIZE_MB}MB...")
-    run(["dd", "if=/dev/zero", f"of={IMG_PATH}", "bs=1M", f"count={IMG_SIZE_MB}"])
+    print(f"Создаём пустой образ {img_path} размером {IMG_SIZE_MB}MB для target={target.name}...")
+    if img_path.exists():
+        img_path.unlink()
+    run(["truncate", "-s", f"{IMG_SIZE_MB}M", img_path])
 
     print("Размечаем образ (boot + rootfs)...")
     sfdisk_input = f"""
@@ -38,51 +66,90 @@ unit: sectors
 /dev/sda1 : start=2048, size={BOOT_SIZE_MB*2048}, type=c
 /dev/sda2 : start={BOOT_SIZE_MB*2048+2048}, type=83
 """.strip()
-    with open(TEMP_PATH / "partition.sfdisk", "w") as f:
-        f.write(sfdisk_input)
-    run(["sfdisk", IMG_PATH, "<", str(TEMP_PATH / "partition.sfdisk")])
+    (TEMP_PATH / "partition.sfdisk").write_text(sfdisk_input)
+    # Передаём разметку через stdin, без shell-редиректа
+    run(["sfdisk", img_path], input_data=sfdisk_input, use_sudo=True)
 
     print("Подключаем loop-устройство...")
-    run(["losetup", "-Pf", IMG_PATH])
-    loopdev = subprocess.check_output(["losetup", "-j", str(IMG_PATH)]).decode().split(":")[0]
-    boot_part = f"{loopdev}p1"
-    rootfs_part = f"{loopdev}p2"
+    # Освобождаем старые привязки этого образа, если они остались
+    existing = check_output(["losetup", "-j", str(img_path)], use_sudo=True).strip().splitlines()
+    for line in existing:
+        dev = line.split(":")[0]
+        if dev:
+            subprocess.run(_command(["losetup", "-d", dev], use_sudo=True), check=False)
+    sector_size = 512
+    boot_start = 2048
+    boot_size_sectors = BOOT_SIZE_MB * 2048
+    root_start = boot_start + boot_size_sectors
+    try:
+        boot_loop = check_output(
+            [
+                "losetup",
+                "--find",
+                "--show",
+                "--offset",
+                str(boot_start * sector_size),
+                "--sizelimit",
+                str(boot_size_sectors * sector_size),
+                str(img_path),
+            ],
+            use_sudo=True,
+        ).strip()
+        root_loop = check_output(
+            [
+                "losetup",
+                "--find",
+                "--show",
+                "--offset",
+                str(root_start * sector_size),
+                str(img_path),
+            ],
+            use_sudo=True,
+        ).strip()
+        print(f"Используем loop-устройства: boot={boot_loop}, root={root_loop}")
 
-    print("Создаём файловые системы...")
-    run(["mkfs.vfat", boot_part])
-    run(["mkfs.ext4", rootfs_part])
+        print("Создаём файловые системы...")
+        run(["mkfs.vfat", boot_loop], use_sudo=True)
+        run(["mkfs.ext4", root_loop], use_sudo=True)
 
-    BOOT_MNT.mkdir(parents=True, exist_ok=True)
-    ROOTFS_MNT.mkdir(parents=True, exist_ok=True)
-    run(["mount", boot_part, BOOT_MNT])
-    run(["mount", rootfs_part, ROOTFS_MNT])
+        BOOT_MNT.mkdir(parents=True, exist_ok=True)
+        ROOTFS_MNT.mkdir(parents=True, exist_ok=True)
+        run(["mount", boot_loop, BOOT_MNT], use_sudo=True)
+        mounted.append(BOOT_MNT)
+        run(["mount", root_loop, ROOTFS_MNT], use_sudo=True)
+        mounted.append(ROOTFS_MNT)
 
-    print("Копируем rootfs...")
-    run(["cp", "-a", str(CONTAINER_PATH) + "/.", str(ROOTFS_MNT)])
+        print("Копируем rootfs...")
+        run(["cp", "-a", str(CONTAINER_PATH) + "/.", str(ROOTFS_MNT)], use_sudo=True)
 
-    print("Копируем boot-файлы...")
-    # Генерируем config.txt и cmdline.txt, если их нет
-    if not CONFIG_TXT.exists():
-        CONFIG_TXT.write_text("kernel=kernel8.img\nenable_uart=1\n")
-        print(f"Создан {CONFIG_TXT}")
-    if not CMDLINE_TXT.exists():
-        CMDLINE_TXT.write_text("console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 fsck.repair=yes rootwait\n")
-        print(f"Создан {CMDLINE_TXT}")
-    if KERNEL_IMAGE.exists():
-        run(["cp", str(KERNEL_IMAGE), str(BOOT_MNT / "kernel8.img")])
-    if CONFIG_TXT.exists():
-        run(["cp", str(CONFIG_TXT), str(BOOT_MNT / "config.txt")])
-    if CMDLINE_TXT.exists():
-        run(["cp", str(CMDLINE_TXT), str(BOOT_MNT / "cmdline.txt")])
-    # Копировать dtb-файлы (если есть)
-    if DTB_DIR.exists():
-        run(["cp", "-a", str(DTB_DIR), str(BOOT_MNT)])
+        print("Копируем boot-файлы...")
+        if target.install_boot_files:
+            CONFIG_TXT.write_text(f"kernel={target.kernel_filename}\narm_64bit=1\nenable_uart=1\n")
+            print(f"Создан {CONFIG_TXT}")
+            CMDLINE_TXT.write_text(target.boot_cmdline + "\n")
+            print(f"Создан {CMDLINE_TXT}")
+        if target.install_boot_files and BOOT_SRC_PATH.exists():
+            run(["cp", "-rL", str(BOOT_SRC_PATH) + "/.", str(BOOT_MNT)], use_sudo=True)
+        if target.install_boot_files and CONFIG_TXT.exists():
+            run(["cp", str(CONFIG_TXT), str(BOOT_MNT / "config.txt")], use_sudo=True)
+        if target.install_boot_files and CMDLINE_TXT.exists():
+            run(["cp", str(CMDLINE_TXT), str(BOOT_MNT / "cmdline.txt")], use_sudo=True)
+    finally:
+        print("Размонтируем...")
+        for mountpoint in reversed(mounted):
+            subprocess.run(_command(["umount", str(mountpoint)], use_sudo=True), check=False)
+        for loopdev in (boot_loop, root_loop):
+            if loopdev:
+                subprocess.run(_command(["losetup", "-d", loopdev], use_sudo=True), check=False)
 
-    print("Размонтируем...")
-    run(["umount", BOOT_MNT])
-    run(["umount", ROOTFS_MNT])
-    run(["losetup", "-d", loopdev])
-    print(f"Готово! Образ: {IMG_PATH}")
+    print(f"Готово! Образ: {img_path}")
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description="Create Litainer disk image from container/")
+    parser.add_argument("--target", choices=sorted(TARGETS), default="pi5")
+    return parser
 
 if __name__ == "__main__":
-    create_img() 
+    args = build_parser().parse_args()
+    create_img(args.target)

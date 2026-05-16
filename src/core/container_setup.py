@@ -4,6 +4,7 @@ import stat
 from pathlib import Path
 from typing import Optional
 from core.interfaces import FileSystemPort, LoggerPort, NetworkConfiguratorPort
+from netos_branding import NETOS_ID, NETOS_NAME, NETOS_VERSION
 import shutil
 import subprocess
 
@@ -98,9 +99,28 @@ tmpfs /tmp tmpfs defaults 0 0
 """
         self.fs.write_text(Path("etc/fstab"), fstab)
         self.fs.write_text(Path("etc/hostname"), hostname + "\n")
-        self.fs.write_text(Path("etc/passwd"), "root:x:0:0:root:/root:/bin/bash\n")
-        self.fs.write_text(Path("etc/group"), "root:x:0:\n")
-        self.logger.info("Созданы fstab, hostname, passwd, group")
+        os_release = f"""NAME="{NETOS_NAME}"
+PRETTY_NAME="{NETOS_NAME} {NETOS_VERSION}"
+ID={NETOS_ID}
+VERSION="{NETOS_VERSION}"
+VERSION_ID="{NETOS_VERSION}"
+ANSI_COLOR="1;36"
+"""
+        etc_os_release = rootfs_path / "etc" / "os-release"
+        usr_lib = rootfs_path / "usr" / "lib"
+        usr_os_release = usr_lib / "os-release"
+        usr_lib.mkdir(parents=True, exist_ok=True)
+        for path in (etc_os_release, usr_os_release):
+            if path.exists() or path.is_symlink():
+                path.unlink()
+        usr_os_release.write_text(os_release)
+        etc_os_release.symlink_to(Path("../usr/lib/os-release"))
+        self.fs.write_text(Path("etc/issue"), f"{NETOS_NAME} {NETOS_VERSION} \\n \\l\n\n")
+        if not (rootfs_path / "etc" / "passwd").exists():
+            self.fs.write_text(Path("etc/passwd"), "root:x:0:0:root:/root:/bin/bash\n")
+        if not (rootfs_path / "etc" / "group").exists():
+            self.fs.write_text(Path("etc/group"), "root:x:0:\n")
+        self.logger.info("Обновлены базовые конфиги rootfs")
 
     def create_dev_nodes(self, rootfs_path: Path):
         """Создаёт статические устройства /dev/null, /dev/console, /dev/tty, если их нет."""
@@ -119,7 +139,23 @@ tmpfs /tmp tmpfs defaults 0 0
                 os.mknod(path, mode, dev)
                 self.logger.info(f"Создан узел устройства: {path}")
             except PermissionError:
-                self.logger.error(f"Недостаточно прав для создания {path}. Запустите с sudo.")
+                try:
+                    subprocess.run(
+                        [
+                            "sudo",
+                            "mknod",
+                            "-m",
+                            oct(mode & 0o777)[2:],
+                            str(path),
+                            "c",
+                            str(os.major(dev)),
+                            str(os.minor(dev)),
+                        ],
+                        check=True,
+                    )
+                    self.logger.info(f"Создан узел устройства через sudo: {path}")
+                except (FileNotFoundError, subprocess.CalledProcessError) as e:
+                    self.logger.error(f"Не удалось создать {path} через sudo: {e}")
             except FileExistsError:
                 pass
             except OSError as e:
@@ -223,13 +259,14 @@ tmpfs /tmp tmpfs defaults 0 0
             self._copy_to_rootfs(cli_tool, rootfs_path, Path("usr/local/bin/cli.py"))
             (rootfs_path / "usr/local/bin/cli.py").chmod(0o755)
 
-        rcS_path = rootfs_path / "etc/init.d/rcS"
-        rcS_path.parent.mkdir(parents=True, exist_ok=True)
         rcS_content = """#!/bin/sh
 set -e
 
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mkdir -p /dev/pts
+mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts 2>/dev/null || true
 
 CGROOT=/sys/fs/cgroup
 if [ ! -d "$CGROOT" ]; then
@@ -239,19 +276,40 @@ if ! mountpoint -q "$CGROOT"; then
     mount -t cgroup2 none "$CGROOT" 2>/dev/null || mount -t cgroup -o none,name=systemd cgroup "$CGROOT" 2>/dev/null || true
 fi
 mkdir -p "$CGROOT/vm.slice"
-echo "100000 50000" > "$CGROOT/vm.slice/cpu.max" 2>/dev/null || true
-echo "1073741824" > "$CGROOT/vm.slice/memory.max" 2>/dev/null || true
+if [ -e "$CGROOT/vm.slice/cpu.max" ] && [ -w "$CGROOT/vm.slice/cpu.max" ]; then
+    echo "100000 50000" > "$CGROOT/vm.slice/cpu.max"
+fi
+if [ -e "$CGROOT/vm.slice/memory.max" ] && [ -w "$CGROOT/vm.slice/memory.max" ]; then
+    echo "1073741824" > "$CGROOT/vm.slice/memory.max"
+fi
 
 OVS_RUNDIR=/var/run/openvswitch
 OVS_DBDIR=/var/lib/openvswitch
 OVS_LOGDIR=/var/log/openvswitch
-SCHEMA=/etc/openvswitch/system.ovsschema
-DB=$OVS_DBDIR/ovsdb.db
+SYS_SCHEMA=/etc/openvswitch/system.ovsschema
+SYS_DB=$OVS_DBDIR/sysdb.db
+OVS_SCHEMA=/usr/share/openvswitch/vswitch.ovsschema
+OVS_DB=$OVS_DBDIR/conf.db
 
 mkdir -p "$OVS_RUNDIR" "$OVS_DBDIR" "$OVS_LOGDIR"
 
-if [ ! -f "$DB" ]; then
-    ovsdb-tool create "$DB" "$SCHEMA"
+if ! command -v ovsdb-tool >/dev/null 2>&1; then
+    echo "OVSDB_TOOL_MISSING"
+    exit 0
+fi
+
+if [ ! -f "$SYS_DB" ]; then
+    ovsdb-tool create "$SYS_DB" "$SYS_SCHEMA"
+fi
+
+DB_ARGS="$SYS_DB"
+if [ -f "$OVS_SCHEMA" ]; then
+    if [ ! -f "$OVS_DB" ]; then
+        ovsdb-tool create "$OVS_DB" "$OVS_SCHEMA"
+    fi
+    DB_ARGS="$DB_ARGS $OVS_DB"
+else
+    echo "OVS_SCHEMA_MISSING:$OVS_SCHEMA"
 fi
 
 ovsdb-server \
@@ -261,14 +319,27 @@ ovsdb-server \
     --pidfile=$OVS_RUNDIR/ovsdb-server.pid \
     --detach --no-chdir \
     --log-file=$OVS_LOGDIR/ovsdb-server.log \
-    "$DB"
+    $DB_ARGS
 echo "OVSDB_STARTED"
+
+if [ -f "$OVS_DB" ] && command -v ovs-vswitchd >/dev/null 2>&1; then
+    ovs-vswitchd unix:$OVS_RUNDIR/db.sock \
+        --pidfile=$OVS_RUNDIR/ovs-vswitchd.pid \
+        --detach --no-chdir \
+        --log-file=$OVS_LOGDIR/ovs-vswitchd.log
+    ovs-vsctl --no-wait init || true
+    echo "OVS_VSWITCHD_STARTED"
+fi
 
 PYTHON_BIN=""
 if [ -x /usr/bin/python3 ]; then
     PYTHON_BIN=/usr/bin/python3
 elif [ -x /bin/python3 ]; then
     PYTHON_BIN=/bin/python3
+fi
+
+if [ -d /usr/share/openvswitch/python ]; then
+    export PYTHONPATH=/usr/share/openvswitch/python${PYTHONPATH:+:$PYTHONPATH}
 fi
 
 if [ -n "$PYTHON_BIN" ] && [ -x /usr/local/sbin/net_agent.py ]; then
@@ -295,9 +366,37 @@ fi
 
 exit 0
 """
+        init_path = rootfs_path / "sbin" / "init"
+        if init_path.exists():
+            service_path = rootfs_path / "etc" / "init.d" / "S99netos"
+            service_path.parent.mkdir(parents=True, exist_ok=True)
+            service_path.write_text(rcS_content)
+            service_path.chmod(0o755)
+            self.logger.info("Установлены схема OVSDB, агенты и init-скрипт S99netos")
+            return
+
+        rcS_path = rootfs_path / "etc/init.d/rcS"
+        rcS_path.parent.mkdir(parents=True, exist_ok=True)
         rcS_path.write_text(rcS_content)
         rcS_path.chmod(0o755)
-        self.logger.info("Установлены схема OVSDB, net_agent и init-скрипт rcS")
+
+        init_path.parent.mkdir(parents=True, exist_ok=True)
+        init_content = """#!/bin/sh
+/etc/init.d/rcS
+status=$?
+if [ "$status" -ne 0 ]; then
+    echo "RCS_FAILED:$status"
+else
+    echo "INIT_READY"
+fi
+
+while true; do
+    sleep 3600
+done
+"""
+        init_path.write_text(init_content)
+        init_path.chmod(0o755)
+        self.logger.info("Установлены схема OVSDB, агенты, rcS и минимальный /sbin/init")
 
     def detach_image(self, device: str):
         subprocess.run(["hdiutil", "detach", device], check=True)

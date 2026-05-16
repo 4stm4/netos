@@ -5,32 +5,50 @@
 """
 import argparse
 import sys
+import time
 from typing import Any, Dict
 
-import ovs.db.idl
+try:
+    import ovs.db.idl as ovs_idl
+    import ovs.poller as ovs_poller
+except ModuleNotFoundError:
+    ovs_idl = None
+    ovs_poller = None
 
 SCHEMA = "src/schema/system.ovsschema"
 REMOTE = "unix:/var/run/openvswitch/db.sock"
+CONNECT_TIMEOUT = 5.0
 
 
-def get_idl(remote: str, schema_path: str) -> ovs.db.idl.Idl:
-    helper = ovs.db.idl.SchemaHelper(location=schema_path)
+def require_ovs():
+    if ovs_idl is None or ovs_poller is None:
+        raise RuntimeError("Python bindings for OVS are missing. Install python3-openvswitch.")
+
+
+def get_idl(remote: str, schema_path: str):
+    require_ovs()
+    helper = ovs_idl.SchemaHelper(location=schema_path)
     helper.register_all()
-    return ovs.db.idl.Idl(remote, helper)
+    idl = ovs_idl.Idl(remote, helper)
+    wait_for_idl(idl, remote)
+    return idl
 
 
-def commit(idl: ovs.db.idl.Idl):
-    txn = ovs.db.idl.Transaction(idl)
-    status = txn.commit_block()
-    if status not in (
-        ovs.db.idl.Transaction.SUCCESS,
-        ovs.db.idl.Transaction.UNCHANGED,
-        ovs.db.idl.Transaction.INCOMPLETE,
-    ):
-        raise RuntimeError(f"Transaction failed: {status}")
+def wait_for_idl(idl, remote: str, timeout: float = CONNECT_TIMEOUT):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        poller = ovs_poller.Poller()
+        idl.run()
+        has_connected = getattr(idl, "has_ever_connected", None)
+        if has_connected is None or has_connected():
+            return
+        idl.wait(poller)
+        poller.timer_wait(100)
+        poller.block()
+    raise TimeoutError(f"Timed out connecting to OVSDB remote {remote}")
 
 
-def upsert_row(idl: ovs.db.idl.Idl, table: str, match: Dict[str, Any], updates: Dict[str, Any]):
+def upsert_row(idl, table: str, match: Dict[str, Any], updates: Dict[str, Any]):
     tbl = idl.tables.get(table)
     if not tbl:
         raise RuntimeError(f"Table {table} not found")
@@ -44,7 +62,7 @@ def upsert_row(idl: ovs.db.idl.Idl, table: str, match: Dict[str, Any], updates: 
         if ok:
             row = r
             break
-    txn = ovs.db.idl.Transaction(idl)
+    txn = ovs_idl.Transaction(idl)
     if row is None:
         row = txn.insert(tbl)
         for k, v in match.items():
@@ -53,9 +71,8 @@ def upsert_row(idl: ovs.db.idl.Idl, table: str, match: Dict[str, Any], updates: 
         setattr(row, k, v)
     status = txn.commit_block()
     if status not in (
-        ovs.db.idl.Transaction.SUCCESS,
-        ovs.db.idl.Transaction.UNCHANGED,
-        ovs.db.idl.Transaction.INCOMPLETE,
+        ovs_idl.Transaction.SUCCESS,
+        ovs_idl.Transaction.UNCHANGED,
     ):
         raise RuntimeError(f"Transaction failed: {status}")
 
@@ -79,9 +96,18 @@ def handle_set(args):
         updates: Dict[str, Any] = {}
         if args.key in ("cpu", "ram"):
             updates[args.key] = int(args.value)
+        elif args.key == "pci_passthrough":
+            updates[args.key] = [item for item in args.value.split(",") if item]
         else:
             updates[args.key] = args.value
         upsert_row(idl, "VirtualMachine", {"name": args.name}, updates)
+    elif args.resource == "storage":
+        updates: Dict[str, Any] = {}
+        if args.key == "lun":
+            updates[args.key] = int(args.value)
+        else:
+            updates[args.key] = args.value
+        upsert_row(idl, "Storage", {"target_iqn": args.name}, updates)
     else:
         raise RuntimeError(f"Unknown resource {args.resource}")
     print("OK")
@@ -104,8 +130,8 @@ def build_parser():
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     setp = sub.add_parser("set", help="Set values")
-    setp.add_argument("resource", choices=["interface", "system", "vm"])
-    setp.add_argument("name", help="Resource name (ignored for system)")
+    setp.add_argument("resource", choices=["interface", "system", "vm", "storage"])
+    setp.add_argument("name", help="Resource name (ignored for system; target_iqn for storage)")
     setp.add_argument("key", help="Field name")
     setp.add_argument("value", help="Field value")
     setp.set_defaults(func=handle_set)
