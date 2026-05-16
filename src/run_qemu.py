@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import http.client
 import os
 import select
 import shutil
@@ -15,6 +16,7 @@ from targets import TARGETS, TargetConfig, get_target
 PROJECT_ROOT = Path(__file__).parent.parent
 KERNEL_IMAGE = PROJECT_ROOT / "temp" / "rpi_linux" / "arch" / "arm64" / "boot" / "Image"
 DEFAULT_READY_MARKERS = {"OVSDB_STARTED", "OVS_VSWITCHD_STARTED", "NET_AGENT_STARTED"}
+DEFAULT_WEBUI_HEALTH_PATH = "/health"
 
 
 def run_checked(cmd: list[str]) -> subprocess.CompletedProcess:
@@ -44,7 +46,14 @@ def qemu_machine_supported(qemu_bin: str, machine: str) -> bool:
     return any(line.split(maxsplit=1)[0] == machine for line in result.stdout.splitlines() if line.strip())
 
 
-def build_qemu_cmd(target: TargetConfig, qemu_bin: str, image_path: Path, host_port: int):
+def build_qemu_cmd(
+    target: TargetConfig,
+    qemu_bin: str,
+    image_path: Path,
+    host_port: int,
+    webui_host_port: int,
+    webui_guest_port: int,
+):
     if not target.qemu_supported:
         raise RuntimeError(
             f"Target {target.name} не имеет QEMU-конфигурации. "
@@ -54,6 +63,10 @@ def build_qemu_cmd(target: TargetConfig, qemu_bin: str, image_path: Path, host_p
     if not qemu_machine_supported(qemu_bin, target.qemu_machine):
         raise RuntimeError(f"QEMU binary {qemu_bin} не поддерживает machine={target.qemu_machine}")
 
+    hostfwds = [
+        f"hostfwd=tcp:127.0.0.1:{host_port}-127.0.0.1:6640",
+        f"hostfwd=tcp:127.0.0.1:{webui_host_port}-127.0.0.1:{webui_guest_port}",
+    ]
     cmd = [
         qemu_bin,
         "-M", target.qemu_machine,
@@ -62,7 +75,7 @@ def build_qemu_cmd(target: TargetConfig, qemu_bin: str, image_path: Path, host_p
         "-kernel", str(KERNEL_IMAGE),
         "-drive", f"file={image_path},format=raw,if=virtio",
         "-append", target.boot_cmdline,
-        "-netdev", f"user,id=net0,hostfwd=tcp:127.0.0.1:{host_port}-127.0.0.1:6640",
+        "-netdev", "user,id=net0," + ",".join(hostfwds),
         "-device", "virtio-net-pci,netdev=net0",
         "-serial", "stdio",
         "-display", "none",
@@ -71,7 +84,36 @@ def build_qemu_cmd(target: TargetConfig, qemu_bin: str, image_path: Path, host_p
     return cmd
 
 
-def wait_for_qemu(cmd: list[str], host_port: int, timeout: int, markers: set[str], skip_tcp_check: bool):
+def check_webui_health(host: str, port: int, path: str, timeout: int):
+    deadline = time.time() + timeout
+    last_error = None
+    while time.time() < deadline:
+        try:
+            conn = http.client.HTTPConnection(host, port, timeout=5)
+            conn.request("GET", path)
+            response = conn.getresponse()
+            body = response.read().decode(errors="replace")
+            conn.close()
+            if 200 <= response.status < 300:
+                print(f"QEMU: Testum Web UI health OK http://{host}:{port}{path}: {body}")
+                return
+            last_error = RuntimeError(f"HTTP {response.status}: {body}")
+        except OSError as exc:
+            last_error = exc
+        time.sleep(1)
+    raise TimeoutError(f"Web UI health-check failed at http://{host}:{port}{path}: {last_error}")
+
+
+def wait_for_qemu(
+    cmd: list[str],
+    host_port: int,
+    timeout: int,
+    markers: set[str],
+    skip_tcp_check: bool,
+    check_webui: bool,
+    webui_host_port: int,
+    webui_health_path: str,
+):
     print("Запускаем QEMU:")
     print("$ " + " ".join(cmd))
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -106,7 +148,9 @@ def wait_for_qemu(cmd: list[str], host_port: int, timeout: int, markers: set[str
                     return 0
                 with socket.create_connection(("127.0.0.1", host_port), timeout=5):
                     print(f"QEMU: ovsdb-server доступен на 127.0.0.1:{host_port}")
-                    return 0
+                if check_webui:
+                    check_webui_health("127.0.0.1", webui_host_port, webui_health_path, timeout=120)
+                return 0
     finally:
         if proc.poll() is None:
             proc.terminate()
@@ -121,6 +165,10 @@ def build_parser():
     parser.add_argument("--target", choices=sorted(TARGETS), default="qemu-virt")
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--host-port", type=int, default=6640)
+    parser.add_argument("--webui-host-port", type=int, default=8080)
+    parser.add_argument("--webui-guest-port", type=int, default=8080)
+    parser.add_argument("--webui-health-path", default=os.environ.get("NETOS_WEBUI_HEALTH_PATH", DEFAULT_WEBUI_HEALTH_PATH))
+    parser.add_argument("--check-webui", action="store_true")
     parser.add_argument("--skip-tcp-check", action="store_true")
     parser.add_argument("--qemu-bin", default=os.environ.get("QEMU_BIN", "qemu-system-aarch64"))
     return parser
@@ -138,8 +186,24 @@ def main():
         )
 
     image_path = require_artifacts(target)
-    cmd = build_qemu_cmd(target, qemu_bin, image_path, args.host_port)
-    return wait_for_qemu(cmd, args.host_port, args.timeout, DEFAULT_READY_MARKERS, args.skip_tcp_check)
+    cmd = build_qemu_cmd(
+        target,
+        qemu_bin,
+        image_path,
+        args.host_port,
+        args.webui_host_port,
+        args.webui_guest_port,
+    )
+    return wait_for_qemu(
+        cmd,
+        args.host_port,
+        args.timeout,
+        DEFAULT_READY_MARKERS,
+        args.skip_tcp_check,
+        args.check_webui,
+        args.webui_host_port,
+        args.webui_health_path,
+    )
 
 
 if __name__ == "__main__":

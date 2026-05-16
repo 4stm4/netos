@@ -43,6 +43,8 @@ class TargetConfig:
     boot_cmdline: str
     install_boot_files: bool
     kernel_config_options: tuple[str, ...]
+    image_size_mb: int
+    boot_size_mb: int
     qemu_machine: Optional[str] = None
     qemu_cpu: Optional[str] = None
     qemu_root_device: Optional[str] = None
@@ -67,6 +69,8 @@ TARGETS = {
         ),
         install_boot_files=True,
         kernel_config_options=COMMON_KERNEL_OPTIONS,
+        image_size_mb=1024,
+        boot_size_mb=256,
     ),
     "qemu-virt": TargetConfig(
         name="qemu-virt",
@@ -79,6 +83,8 @@ TARGETS = {
         ),
         install_boot_files=False,
         kernel_config_options=QEMU_VIRT_KERNEL_OPTIONS,
+        image_size_mb=512,
+        boot_size_mb=64,
         qemu_machine="virt",
         qemu_cpu="cortex-a72",
         qemu_root_device="/dev/vda2",

@@ -6,8 +6,7 @@ from typing import Union
 
 from targets import TARGETS, TargetConfig, get_target
 
-IMG_SIZE_MB = 2048  # Размер образа в мегабайтах
-BOOT_SIZE_MB = 256  # Размер boot-раздела
+MIN_ROOTFS_SIZE_MB = 128
 
 PROJECT_ROOT = Path(__file__).parent.parent
 CONTAINER_PATH = PROJECT_ROOT / "container"
@@ -19,6 +18,30 @@ ROOTFS_MNT = TEMP_PATH / "mnt_rootfs"
 
 CONFIG_TXT = TEMP_PATH / "config.txt"
 CMDLINE_TXT = TEMP_PATH / "cmdline.txt"
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer number of megabytes") from exc
+    if value <= 0:
+        raise ValueError(f"{name} must be greater than zero")
+    return value
+
+
+def _image_layout(target: TargetConfig) -> tuple[int, int]:
+    image_size_mb = _env_int("NETOS_IMAGE_SIZE_MB", target.image_size_mb)
+    boot_size_mb = _env_int("NETOS_BOOT_SIZE_MB", target.boot_size_mb)
+    if image_size_mb <= boot_size_mb + MIN_ROOTFS_SIZE_MB:
+        raise ValueError(
+            "NETOS_IMAGE_SIZE_MB must leave at least "
+            f"{MIN_ROOTFS_SIZE_MB}MB for rootfs after boot partition"
+        )
+    return image_size_mb, boot_size_mb
 
 def _command(cmd, use_sudo=False):
     resolved = [str(arg) for arg in cmd]
@@ -46,16 +69,20 @@ def _resolve_target(target: Union[str, TargetConfig]) -> TargetConfig:
 
 def create_img(target: Union[str, TargetConfig] = "pi5"):
     target = _resolve_target(target)
+    image_size_mb, boot_size_mb = _image_layout(target)
     img_path = PROJECT_ROOT / target.image_name
     boot_loop = None
     root_loop = None
     mounted = []
 
     TEMP_PATH.mkdir(parents=True, exist_ok=True)
-    print(f"Создаём пустой образ {img_path} размером {IMG_SIZE_MB}MB для target={target.name}...")
+    print(
+        f"Создаём пустой образ {img_path} размером {image_size_mb}MB "
+        f"для target={target.name}..."
+    )
     if img_path.exists():
         img_path.unlink()
-    run(["truncate", "-s", f"{IMG_SIZE_MB}M", img_path])
+    run(["truncate", "-s", f"{image_size_mb}M", img_path])
 
     print("Размечаем образ (boot + rootfs)...")
     sfdisk_input = f"""
@@ -63,8 +90,8 @@ label: dos
 label-id: 0x0
 unit: sectors
 
-/dev/sda1 : start=2048, size={BOOT_SIZE_MB*2048}, type=c
-/dev/sda2 : start={BOOT_SIZE_MB*2048+2048}, type=83
+/dev/sda1 : start=2048, size={boot_size_mb*2048}, type=c
+/dev/sda2 : start={boot_size_mb*2048+2048}, type=83
 """.strip()
     (TEMP_PATH / "partition.sfdisk").write_text(sfdisk_input)
     # Передаём разметку через stdin, без shell-редиректа
@@ -79,7 +106,7 @@ unit: sectors
             subprocess.run(_command(["losetup", "-d", dev], use_sudo=True), check=False)
     sector_size = 512
     boot_start = 2048
-    boot_size_sectors = BOOT_SIZE_MB * 2048
+    boot_size_sectors = boot_size_mb * 2048
     root_start = boot_start + boot_size_sectors
     try:
         boot_loop = check_output(

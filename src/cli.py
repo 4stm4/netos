@@ -6,6 +6,7 @@
 import argparse
 import sys
 import time
+from pathlib import Path
 from typing import Any, Dict
 
 try:
@@ -15,7 +16,12 @@ except ModuleNotFoundError:
     ovs_idl = None
     ovs_poller = None
 
-SCHEMA = "src/schema/system.ovsschema"
+SCHEMA_CANDIDATES = (
+    Path("/etc/openvswitch/system.ovsschema"),
+    Path(__file__).resolve().parent / "schema" / "system.ovsschema",
+    Path("src/schema/system.ovsschema"),
+)
+SCHEMA = str(next((path for path in SCHEMA_CANDIDATES if path.exists()), SCHEMA_CANDIDATES[0]))
 REMOTE = "unix:/var/run/openvswitch/db.sock"
 CONNECT_TIMEOUT = 5.0
 

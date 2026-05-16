@@ -5,9 +5,10 @@ import time
 import os
 import plistlib
 
-IMG_SIZE = "2g"
+IMG_SIZE_MB = int(os.environ.get("NETOS_IMAGE_SIZE_MB", "1024"))
+IMG_SIZE = f"{IMG_SIZE_MB}m"
 IMG_NAME = "raspi.img"
-BOOT_SIZE_MB = 256
+BOOT_SIZE_MB = int(os.environ.get("NETOS_BOOT_SIZE_MB", "256"))
 PROJECT_ROOT = Path(__file__).parent.parent
 CONTAINER_PATH = PROJECT_ROOT / "container"
 TEMP_PATH = PROJECT_ROOT / "temp"
@@ -53,7 +54,7 @@ def create_img():
         print(f"[!] Папка {CONTAINER_PATH} не найдена или пуста. Сначала соберите rootfs через main.py!")
         sys.exit(1)
     print(f"Создаём пустой образ {IMG_PATH} размером {IMG_SIZE}...")
-    run(["dd", "if=/dev/zero", f"of={IMG_PATH}", "bs=1m", f"count=2048"])
+    run(["dd", "if=/dev/zero", f"of={IMG_PATH}", "bs=1m", f"count={IMG_SIZE_MB}"])
     detach_if_attached(str(IMG_PATH))
 
     print("Подключаем образ...")
@@ -141,4 +142,4 @@ quit
     print(f"Готово! Образ: {IMG_PATH}")
 
 if __name__ == "__main__":
-    create_img() 
+    create_img()

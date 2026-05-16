@@ -86,6 +86,7 @@ if __name__ == "__main__":
     setup.setup_network(ROOTFS_PATH)
     setup.create_dev_nodes(ROOTFS_PATH)
     linux_kernel.install_kernel()
+    setup.install_webui_assets(ROOTFS_PATH)
     setup.install_ovsdb_assets(
         ROOTFS_PATH,
         SCHEMA_PATH,

@@ -1,6 +1,7 @@
 import os
 import platform
 import stat
+import sys
 from pathlib import Path
 from typing import Optional
 from core.interfaces import FileSystemPort, LoggerPort, NetworkConfiguratorPort
@@ -218,6 +219,506 @@ ANSI_COLOR="1;36"
                     self._copy_to_rootfs(dep, rootfs_path)
                 else:
                     self.logger.error(f"Зависимость {dep} не найдена!")
+
+    def install_webui_assets(self, rootfs_path: Path):
+        """Installs Testum web UI bootstrap config and SysV init integration."""
+        enabled = os.environ.get("NETOS_WEBUI_ENABLED", "1")
+        port = os.environ.get("NETOS_WEBUI_PORT", "8080")
+        data_dir = os.environ.get("NETOS_WEBUI_DATA_DIR", "/opt/testum")
+        embed = os.environ.get("NETOS_WEBUI_EMBED", "1")
+        install_url = os.environ.get(
+            "NETOS_WEBUI_INSTALL_URL",
+            "https://raw.githubusercontent.com/4stm4/testum/main/install.sh",
+        )
+        git_url = os.environ.get("NETOS_WEBUI_GIT_URL", "https://github.com/4stm4/testum.git")
+        git_ref = os.environ.get("NETOS_WEBUI_GIT_REF", "main")
+        admin_password = os.environ.get("NETOS_WEBUI_ADMIN_PASSWORD", "")
+        start_cmd = os.environ.get(
+            "NETOS_WEBUI_START_CMD",
+            "python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${TESTUM_PORT:-8080}",
+        )
+        migrate_cmd = os.environ.get("NETOS_WEBUI_MIGRATE_CMD", "python3 -m alembic upgrade head")
+        app_module = os.environ.get("NETOS_WEBUI_APP_MODULE", "app.main:app")
+        pythonpath = os.environ.get("NETOS_WEBUI_PYTHONPATH", "src")
+        health_path = os.environ.get("NETOS_WEBUI_HEALTH_PATH", "/health")
+        source_dir = os.environ.get("NETOS_WEBUI_SOURCE_DIR", "")
+        app_env = os.environ.get("NETOS_WEBUI_APP_ENV", "production")
+        admin_username = os.environ.get("NETOS_WEBUI_ADMIN_USERNAME", "admin")
+        database_url = os.environ.get("NETOS_WEBUI_DATABASE_URL", f"sqlite:///{data_dir}/testum.db")
+        ssh_host_key_policy = os.environ.get("NETOS_WEBUI_SSH_HOST_KEY_POLICY", "auto_add")
+        pip_mode = os.environ.get("NETOS_WEBUI_PIP_MODE", "never")
+        vendor_packages = os.environ.get(
+            "NETOS_WEBUI_EMBED_VENDOR_PACKAGES",
+            "pyjobkit==1.0.0 croniter==6.2.2",
+        )
+
+        preloaded = self._embed_webui_source(
+            rootfs_path=rootfs_path,
+            data_dir=data_dir,
+            embed=embed,
+            source_dir=source_dir,
+            git_url=git_url,
+            git_ref=git_ref,
+            vendor_packages=vendor_packages,
+        )
+
+        runtime_install_url = "" if preloaded else install_url
+        runtime_git_url = "" if preloaded else git_url
+
+        def sh_quote(value: str) -> str:
+            return "'" + value.replace("'", "'\"'\"'") + "'"
+
+        etc_netos = rootfs_path / "etc" / "netos"
+        etc_netos.mkdir(parents=True, exist_ok=True)
+        env_path = etc_netos / "webui.env"
+        env_path.write_text(
+            "\n".join(
+                [
+                    f"TESTUM_ENABLED={sh_quote(enabled)}",
+                    f"TESTUM_PRELOADED={sh_quote('1' if preloaded else '0')}",
+                    f"TESTUM_PORT={sh_quote(port)}",
+                    f"TESTUM_DATA_DIR={sh_quote(data_dir)}",
+                    f"TESTUM_INSTALL_URL={sh_quote(runtime_install_url)}",
+                    f"TESTUM_GIT_URL={sh_quote(runtime_git_url)}",
+                    f"TESTUM_GIT_REF={sh_quote(git_ref)}",
+                    f"TESTUM_APP_ENV={sh_quote(app_env)}",
+                    f"TESTUM_ADMIN_USERNAME={sh_quote(admin_username)}",
+                    f"TESTUM_ADMIN_PASSWORD={sh_quote(admin_password)}",
+                    f"TESTUM_DATABASE_URL={sh_quote(database_url)}",
+                    f"TESTUM_SSH_HOST_KEY_POLICY={sh_quote(ssh_host_key_policy)}",
+                    f"TESTUM_PIP_MODE={sh_quote(pip_mode)}",
+                    f"TESTUM_START_CMD={sh_quote(start_cmd)}",
+                    f"TESTUM_MIGRATE_CMD={sh_quote(migrate_cmd)}",
+                    f"TESTUM_APP_MODULE={sh_quote(app_module)}",
+                    f"TESTUM_PYTHONPATH={sh_quote(pythonpath)}",
+                    f"TESTUM_HEALTH_PATH={sh_quote(health_path)}",
+                    "",
+                ]
+            )
+        )
+        env_path.chmod(0o600)
+
+        sbin_dir = rootfs_path / "usr" / "local" / "sbin"
+        sbin_dir.mkdir(parents=True, exist_ok=True)
+        installer_path = sbin_dir / "netos-webui-service"
+        installer_path.write_text(self._webui_service_script())
+        installer_path.chmod(0o755)
+
+        init_dir = rootfs_path / "etc" / "init.d"
+        init_dir.mkdir(parents=True, exist_ok=True)
+        init_path = init_dir / "S98testum"
+        init_path.write_text(self._webui_init_script())
+        init_path.chmod(0o755)
+        self.logger.info("Установлены bootstrap и init-скрипт Testum Web UI")
+
+    def _embed_webui_source(
+        self,
+        rootfs_path: Path,
+        data_dir: str,
+        embed: str,
+        source_dir: str,
+        git_url: str,
+        git_ref: str,
+        vendor_packages: str,
+    ) -> bool:
+        enabled = embed.lower() not in {"0", "false", "no", "off"}
+        target_path = rootfs_path / data_dir.lstrip("/")
+        source_path = Path(source_dir).expanduser() if source_dir else None
+
+        if source_path:
+            if not source_path.exists():
+                raise FileNotFoundError(f"NETOS_WEBUI_SOURCE_DIR не найден: {source_path}")
+            self._copy_webui_source(source_path, target_path)
+            self._vendor_webui_python_packages(target_path, vendor_packages)
+            return True
+
+        if not enabled:
+            return False
+
+        if not git_url:
+            self.logger.error("NETOS_WEBUI_EMBED включен, но NETOS_WEBUI_GIT_URL пустой")
+            return False
+
+        if target_path.exists():
+            shutil.rmtree(target_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["git", "clone", "--depth=1", "--branch", git_ref, git_url, str(target_path)],
+            check=True,
+        )
+        self._cleanup_webui_source(target_path)
+        self._vendor_webui_python_packages(target_path, vendor_packages)
+        self.logger.info(f"Testum Web UI embedded from {git_url}@{git_ref} -> {target_path}")
+        return True
+
+    def _copy_webui_source(self, source_path: Path, target_path: Path):
+        if target_path.exists():
+            shutil.rmtree(target_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(
+            source_path,
+            target_path,
+            ignore=shutil.ignore_patterns(
+                ".git",
+                ".github",
+                "__pycache__",
+                ".pytest_cache",
+                ".mypy_cache",
+                ".ruff_cache",
+                ".venv",
+                "venv",
+                "node_modules",
+                ".DS_Store",
+                "*.pyc",
+                "dev.db",
+                "test.db",
+            ),
+        )
+        self._cleanup_webui_source(target_path)
+        self.logger.info(f"Web UI source copied: {source_path} -> {target_path}")
+
+    def _cleanup_webui_source(self, target_path: Path):
+        removable_paths = (
+            ".git",
+            ".github",
+            ".pytest_cache",
+            ".mypy_cache",
+            ".ruff_cache",
+            ".venv",
+            "venv",
+            "node_modules",
+        )
+        for rel_path in removable_paths:
+            path = target_path / rel_path
+            if path.is_dir():
+                shutil.rmtree(path)
+            elif path.exists():
+                path.unlink()
+        for pattern in ("*.pyc", ".DS_Store", "dev.db", "test.db"):
+            for path in target_path.rglob(pattern):
+                if path.is_file():
+                    path.unlink()
+        (target_path / ".netos-embedded").write_text("embedded=1\n")
+
+    def _vendor_webui_python_packages(self, target_path: Path, vendor_packages: str):
+        packages = [package for package in vendor_packages.split() if package]
+        if not packages:
+            return
+        vendor_dir = target_path / ".python"
+        if vendor_dir.exists():
+            shutil.rmtree(vendor_dir)
+        vendor_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--target",
+                str(vendor_dir),
+                "--no-deps",
+                "--no-compile",
+                *packages,
+            ],
+            check=True,
+        )
+        bin_dir = vendor_dir / "bin"
+        if bin_dir.exists():
+            shutil.rmtree(bin_dir)
+        self.logger.info(f"Vendored Web UI Python packages into {vendor_dir}: {', '.join(packages)}")
+
+    def _webui_service_script(self) -> str:
+        return """#!/bin/sh
+set -u
+
+ENV_FILE=/etc/netos/webui.env
+LOG_DIR=/var/log/testum
+STATE_DIR=/var/lib/testum
+RUN_DIR=/run/testum
+
+mkdir -p "$LOG_DIR" "$STATE_DIR" "$RUN_DIR"
+
+log() {
+    echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*"
+}
+
+if [ -f "$ENV_FILE" ]; then
+    . "$ENV_FILE"
+fi
+
+TESTUM_ENABLED=${TESTUM_ENABLED:-1}
+case "$TESTUM_ENABLED" in
+    0|false|False|no|No|off|Off)
+        log "Testum Web UI disabled"
+        exit 0
+        ;;
+esac
+
+TESTUM_PORT=${TESTUM_PORT:-8080}
+TESTUM_DATA_DIR=${TESTUM_DATA_DIR:-/opt/testum}
+TESTUM_PRELOADED=${TESTUM_PRELOADED:-0}
+TESTUM_GIT_REF=${TESTUM_GIT_REF:-main}
+TESTUM_INSTALL_URL=${TESTUM_INSTALL_URL:-}
+TESTUM_GIT_URL=${TESTUM_GIT_URL:-}
+TESTUM_APP_ENV=${TESTUM_APP_ENV:-production}
+TESTUM_ADMIN_USERNAME=${TESTUM_ADMIN_USERNAME:-admin}
+TESTUM_DATABASE_URL=${TESTUM_DATABASE_URL:-sqlite:///$TESTUM_DATA_DIR/testum.db}
+TESTUM_SSH_HOST_KEY_POLICY=${TESTUM_SSH_HOST_KEY_POLICY:-auto_add}
+TESTUM_PIP_MODE=${TESTUM_PIP_MODE:-never}
+TESTUM_START_CMD=${TESTUM_START_CMD:-}
+TESTUM_MIGRATE_CMD=${TESTUM_MIGRATE_CMD:-}
+TESTUM_APP_MODULE=${TESTUM_APP_MODULE:-}
+TESTUM_PYTHONPATH=${TESTUM_PYTHONPATH:-}
+RUNTIME_ENV="$STATE_DIR/runtime.env"
+
+apply_testum_pythonpath() {
+    if [ -z "$TESTUM_PYTHONPATH" ]; then
+        return 0
+    fi
+    OLD_IFS=$IFS
+    IFS=:
+    EXTRA=
+    for item in $TESTUM_PYTHONPATH; do
+        case "$item" in
+            /*) path="$item" ;;
+            *) path="$TESTUM_DATA_DIR/$item" ;;
+        esac
+        if [ -z "$EXTRA" ]; then
+            EXTRA="$path"
+        else
+            EXTRA="$EXTRA:$path"
+        fi
+    done
+    IFS=$OLD_IFS
+    export PYTHONPATH="$EXTRA${PYTHONPATH:+:$PYTHONPATH}"
+}
+
+generate_runtime_env() {
+    if [ ! -f "$RUNTIME_ENV" ]; then
+        touch "$RUNTIME_ENV"
+        chmod 600 "$RUNTIME_ENV"
+    fi
+    . "$RUNTIME_ENV" 2>/dev/null || true
+    if [ -z "${SECRET_KEY:-}" ]; then
+        SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
+        echo "SECRET_KEY='$SECRET_KEY'" >> "$RUNTIME_ENV"
+    fi
+    if [ -z "${FERNET_KEY:-}" ]; then
+        FERNET_KEY=$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
+        echo "FERNET_KEY='$FERNET_KEY'" >> "$RUNTIME_ENV"
+    fi
+    if [ -z "${TESTUM_ADMIN_PASSWORD:-}" ]; then
+        TESTUM_ADMIN_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')
+        echo "TESTUM_ADMIN_PASSWORD='$TESTUM_ADMIN_PASSWORD'" >> "$RUNTIME_ENV"
+    fi
+    if [ -z "${ADMIN_USERNAME:-}" ]; then
+        ADMIN_USERNAME="$TESTUM_ADMIN_USERNAME"
+        echo "ADMIN_USERNAME='$ADMIN_USERNAME'" >> "$RUNTIME_ENV"
+    fi
+    if [ -z "${ADMIN_PASSWORD:-}" ]; then
+        ADMIN_PASSWORD="$TESTUM_ADMIN_PASSWORD"
+        echo "ADMIN_PASSWORD='$ADMIN_PASSWORD'" >> "$RUNTIME_ENV"
+    fi
+    if [ -z "${DATABASE_URL:-}" ]; then
+        DATABASE_URL="$TESTUM_DATABASE_URL"
+        echo "DATABASE_URL='$DATABASE_URL'" >> "$RUNTIME_ENV"
+    fi
+    if [ -z "${APP_ENV:-}" ]; then
+        APP_ENV="$TESTUM_APP_ENV"
+        echo "APP_ENV='$APP_ENV'" >> "$RUNTIME_ENV"
+    fi
+    if [ -z "${SSH_HOST_KEY_POLICY:-}" ]; then
+        SSH_HOST_KEY_POLICY="$TESTUM_SSH_HOST_KEY_POLICY"
+        echo "SSH_HOST_KEY_POLICY='$SSH_HOST_KEY_POLICY'" >> "$RUNTIME_ENV"
+    fi
+    export SECRET_KEY FERNET_KEY TESTUM_ADMIN_PASSWORD ADMIN_USERNAME ADMIN_PASSWORD DATABASE_URL APP_ENV SSH_HOST_KEY_POLICY
+}
+
+run_install_sh() {
+    if [ -z "$TESTUM_INSTALL_URL" ]; then
+        return 1
+    fi
+    log "Downloading Testum installer from $TESTUM_INSTALL_URL"
+    curl -fsSL "$TESTUM_INSTALL_URL" -o /tmp/testum-install.sh || return 1
+    chmod +x /tmp/testum-install.sh
+    set -- --bare-metal --port "$TESTUM_PORT" --data-dir "$TESTUM_DATA_DIR"
+    if [ -n "${TESTUM_ADMIN_PASSWORD:-}" ]; then
+        set -- "$@" --admin-password "$TESTUM_ADMIN_PASSWORD"
+    fi
+    sh /tmp/testum-install.sh "$@"
+}
+
+sync_git_source() {
+    if [ -z "$TESTUM_GIT_URL" ]; then
+        return 1
+    fi
+    if [ ! -d "$TESTUM_DATA_DIR/.git" ]; then
+        rm -rf "$TESTUM_DATA_DIR"
+        git clone --depth=1 --branch "$TESTUM_GIT_REF" "$TESTUM_GIT_URL" "$TESTUM_DATA_DIR"
+    else
+        git -C "$TESTUM_DATA_DIR" fetch --depth=1 origin "$TESTUM_GIT_REF" || return 1
+        git -C "$TESTUM_DATA_DIR" reset --hard "origin/$TESTUM_GIT_REF" || return 1
+    fi
+}
+
+prepare_python_deps() {
+    cd "$TESTUM_DATA_DIR" || return 1
+    PYTHON_BIN=python3
+    PYTHONPATH_EXTRA=
+    if [ -d "$TESTUM_DATA_DIR/.python" ]; then
+        PYTHONPATH_EXTRA="$TESTUM_DATA_DIR/.python"
+    fi
+    case "$TESTUM_PIP_MODE" in
+        never|Never|off|Off|0|false|False|no|No)
+            log "pip install disabled; using embedded/Buildroot Python packages"
+            echo "$PYTHON_BIN" > "$RUN_DIR/python-bin"
+            echo "$PYTHONPATH_EXTRA" > "$RUN_DIR/pythonpath-extra"
+            return 0
+            ;;
+    esac
+    if [ -f requirements.txt ]; then
+        if python3 -m venv "$TESTUM_DATA_DIR/venv" >/dev/null 2>&1; then
+            PYTHON_BIN="$TESTUM_DATA_DIR/venv/bin/python"
+            "$PYTHON_BIN" -m pip install --no-cache-dir --upgrade pip
+            "$PYTHON_BIN" -m pip install --no-cache-dir -r requirements.txt
+        elif python3 -m pip --version >/dev/null 2>&1; then
+            mkdir -p "$TESTUM_DATA_DIR/.python"
+            python3 -m pip install --no-cache-dir --target "$TESTUM_DATA_DIR/.python" -r requirements.txt
+            PYTHONPATH_EXTRA="$TESTUM_DATA_DIR/.python"
+        else
+            log "pip/venv unavailable; using Buildroot-provided Python packages"
+        fi
+    fi
+    echo "$PYTHON_BIN" > "$RUN_DIR/python-bin"
+    echo "$PYTHONPATH_EXTRA" > "$RUN_DIR/pythonpath-extra"
+}
+
+run_migrations() {
+    cd "$TESTUM_DATA_DIR" || return 0
+    apply_testum_pythonpath
+    PYTHON_BIN=$(cat "$RUN_DIR/python-bin" 2>/dev/null || echo python3)
+    PYTHONPATH_EXTRA=$(cat "$RUN_DIR/pythonpath-extra" 2>/dev/null || true)
+    if [ -n "$PYTHONPATH_EXTRA" ]; then
+        export PYTHONPATH="$PYTHONPATH_EXTRA${PYTHONPATH:+:$PYTHONPATH}"
+    fi
+    if [ -n "$TESTUM_MIGRATE_CMD" ]; then
+        sh -c "$TESTUM_MIGRATE_CMD" || log "migration command failed"
+    elif [ -f manage.py ]; then
+        "$PYTHON_BIN" manage.py migrate --noinput || log "django migrations failed"
+    elif [ -f alembic.ini ]; then
+        "$PYTHON_BIN" -m alembic upgrade head || alembic upgrade head || log "alembic migrations failed"
+    fi
+}
+
+bootstrap_if_needed() {
+    generate_runtime_env
+    if [ -f "$STATE_DIR/installed" ]; then
+        return 0
+    fi
+    if [ "$TESTUM_PRELOADED" = "1" ] && [ -d "$TESTUM_DATA_DIR" ]; then
+        prepare_python_deps || true
+        run_migrations || true
+        touch "$STATE_DIR/installed"
+        return 0
+    fi
+    if [ -n "$TESTUM_INSTALL_URL" ]; then
+        if run_install_sh; then
+            touch "$STATE_DIR/installed"
+            return 0
+        fi
+        log "install.sh failed; trying git/preloaded source fallback"
+    fi
+    if [ -n "$TESTUM_GIT_URL" ]; then
+        sync_git_source || return 1
+    elif [ ! -d "$TESTUM_DATA_DIR" ]; then
+        log "No Testum source configured. Set TESTUM_INSTALL_URL, TESTUM_GIT_URL or preload $TESTUM_DATA_DIR."
+        return 1
+    fi
+    prepare_python_deps || true
+    run_migrations || true
+    touch "$STATE_DIR/installed"
+}
+
+start_webui() {
+    cd "$TESTUM_DATA_DIR" || return 1
+    . "$RUNTIME_ENV" 2>/dev/null || true
+    export SECRET_KEY FERNET_KEY TESTUM_ADMIN_PASSWORD ADMIN_USERNAME ADMIN_PASSWORD DATABASE_URL APP_ENV SSH_HOST_KEY_POLICY TESTUM_PORT
+    apply_testum_pythonpath
+    PYTHON_BIN=$(cat "$RUN_DIR/python-bin" 2>/dev/null || echo python3)
+    PYTHONPATH_EXTRA=$(cat "$RUN_DIR/pythonpath-extra" 2>/dev/null || true)
+    if [ -n "$PYTHONPATH_EXTRA" ]; then
+        export PYTHONPATH="$PYTHONPATH_EXTRA${PYTHONPATH:+:$PYTHONPATH}"
+    fi
+    if [ -n "$TESTUM_START_CMD" ]; then
+        exec sh -c "$TESTUM_START_CMD"
+    fi
+    if [ -x ./start.sh ]; then
+        exec ./start.sh
+    fi
+    if [ -f manage.py ]; then
+        exec "$PYTHON_BIN" manage.py runserver "0.0.0.0:$TESTUM_PORT"
+    fi
+    if [ -n "$TESTUM_APP_MODULE" ]; then
+        exec "$PYTHON_BIN" -m uvicorn "$TESTUM_APP_MODULE" --host 0.0.0.0 --port "$TESTUM_PORT"
+    fi
+    if [ -f app/main.py ]; then
+        exec "$PYTHON_BIN" -m uvicorn app.main:app --host 0.0.0.0 --port "$TESTUM_PORT"
+    fi
+    if [ -f main.py ]; then
+        exec "$PYTHON_BIN" -m uvicorn main:app --host 0.0.0.0 --port "$TESTUM_PORT"
+    fi
+    log "No Testum startup command found. Set TESTUM_START_CMD or TESTUM_APP_MODULE."
+    return 1
+}
+
+bootstrap_if_needed || exit 0
+log "Starting Testum Web UI on port $TESTUM_PORT"
+start_webui
+"""
+
+    def _webui_init_script(self) -> str:
+        return """#!/bin/sh
+
+PIDFILE=/run/testum/testum.pid
+LOGFILE=/var/log/testum/service.log
+SERVICE=/usr/local/sbin/netos-webui-service
+ENV_FILE=/etc/netos/webui.env
+
+is_enabled() {
+    TESTUM_ENABLED=1
+    [ -f "$ENV_FILE" ] && . "$ENV_FILE"
+    case "${TESTUM_ENABLED:-1}" in
+        0|false|False|no|No|off|Off) return 1 ;;
+    esac
+    return 0
+}
+
+start() {
+    is_enabled || return 0
+    mkdir -p /run/testum /var/log/testum
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "Testum Web UI already running"
+        return 0
+    fi
+    "$SERVICE" >> "$LOGFILE" 2>&1 &
+    echo $! > "$PIDFILE"
+    echo "TESTUM_WEBUI_STARTED"
+}
+
+stop() {
+    if [ -f "$PIDFILE" ]; then
+        kill "$(cat "$PIDFILE")" 2>/dev/null || true
+        rm -f "$PIDFILE"
+    fi
+}
+
+case "${1:-start}" in
+    start) start ;;
+    stop) stop ;;
+    restart) stop; start ;;
+    *) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
+"""
 
     def install_ovsdb_assets(
         self,
