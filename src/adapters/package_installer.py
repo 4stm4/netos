@@ -46,6 +46,8 @@ def install_dependencies():
                 "libssl-dev",
                 "libelf-dev",
                 "bc",
+                "bison",
+                "flex",
                 "kmod",
                 "gcc-aarch64-linux-gnu",
                 "g++-aarch64-linux-gnu",
