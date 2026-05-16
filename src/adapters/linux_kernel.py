@@ -196,7 +196,7 @@ class LinuxKernel:
 
 
     def compile_kernel(self):
-        """Компилируем ядро, если оно не скомпилировано."""
+        """Компилируем ядро инкрементально для текущей конфигурации target."""
         if self.prebuilt_kernel_image:
             self.kernel_image.parent.mkdir(parents=True, exist_ok=True)
             if self.prebuilt_kernel_image.resolve() != self.kernel_image.resolve():
@@ -204,28 +204,21 @@ class LinuxKernel:
             logging.info(f"Prebuilt kernel Image готов: {self.kernel_image}")
             return
 
-        kernel_path = self.kernel_image  # Путь к скомпилированному ядру
-        if not kernel_path.exists():
-            logging.info("Ядро не найдено, начинаем компиляцию...")
-            # Получаем количество доступных процессоров для оптимизации сборки
-            nproc = os.cpu_count() or 1
-
-            # Запускаем команду make с использованием параллельной сборки
-            subprocess.run(
-                [
-                    "make",
-                    f"-j{nproc}",
-                    "ARCH=arm64",
-                    "CROSS_COMPILE=aarch64-linux-gnu-",
-                    "Image",
-                    "modules",
-                    "dtbs",
-                ],
-                check=True,
-                cwd=self.rpi_repo_path,
-            )
-        else:
-            logging.info("Ядро уже скомпилировано, пропускаем компиляцию.")
+        logging.info("Собираем ядро для текущего target...")
+        nproc = os.cpu_count() or 1
+        subprocess.run(
+            [
+                "make",
+                f"-j{nproc}",
+                "ARCH=arm64",
+                "CROSS_COMPILE=aarch64-linux-gnu-",
+                "Image",
+                "modules",
+                "dtbs",
+            ],
+            check=True,
+            cwd=self.rpi_repo_path,
+        )
 
     def install_kernel(self):
         """Устанавливаем модули в rootfs и копируем Image/DTB в /boot."""
