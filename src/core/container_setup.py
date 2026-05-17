@@ -1,5 +1,6 @@
 import os
 import platform
+import re
 import stat
 import sys
 from pathlib import Path
@@ -329,7 +330,7 @@ ANSI_COLOR="1;36"
             if not source_path.exists():
                 raise FileNotFoundError(f"NETOS_WEBUI_SOURCE_DIR не найден: {source_path}")
             self._copy_webui_source(source_path, target_path)
-            self._vendor_webui_python_packages(target_path, vendor_packages)
+            self._vendor_webui_python_packages(target_path, vendor_packages, source_path)
             return True
 
         if not enabled:
@@ -400,7 +401,12 @@ ANSI_COLOR="1;36"
                     path.unlink()
         (target_path / ".netos-embedded").write_text("embedded=1\n")
 
-    def _vendor_webui_python_packages(self, target_path: Path, vendor_packages: str):
+    def _vendor_webui_python_packages(
+        self,
+        target_path: Path,
+        vendor_packages: str,
+        source_path: Optional[Path] = None,
+    ):
         packages = [package for package in vendor_packages.split() if package]
         if not packages:
             return
@@ -408,24 +414,107 @@ ANSI_COLOR="1;36"
         if vendor_dir.exists():
             shutil.rmtree(vendor_dir)
         vendor_dir.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "--target",
-                str(vendor_dir),
-                "--no-deps",
-                "--no-compile",
-                *packages,
-            ],
-            check=True,
-        )
+        copied_names: set[str] = set()
+        if source_path:
+            copied_names = self._copy_vendor_packages_from_source_venv(
+                source_path, vendor_dir, packages
+            )
+        remaining = [
+            package
+            for package in packages
+            if self._vendor_package_name(package) not in copied_names
+        ]
+        if remaining:
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--target",
+                    str(vendor_dir),
+                    "--no-deps",
+                    "--no-compile",
+                    *remaining,
+                ],
+                check=True,
+            )
         bin_dir = vendor_dir / "bin"
         if bin_dir.exists():
             shutil.rmtree(bin_dir)
+        self._cleanup_vendor_tree(vendor_dir)
         self.logger.info(f"Vendored Web UI Python packages into {vendor_dir}: {', '.join(packages)}")
+
+    def _copy_vendor_packages_from_source_venv(
+        self, source_path: Path, vendor_dir: Path, packages: list[str]
+    ) -> set[str]:
+        copied: set[str] = set()
+        for site_packages in self._source_venv_site_packages(source_path):
+            for package_spec in packages:
+                package_name = self._vendor_package_name(package_spec)
+                if package_name in copied:
+                    continue
+                if self._copy_vendor_package(site_packages, vendor_dir, package_name):
+                    copied.add(package_name)
+            if len(copied) == len(packages):
+                break
+        if copied:
+            self.logger.info(
+                "Copied Web UI vendor packages from source venv: "
+                + ", ".join(sorted(copied))
+            )
+        return copied
+
+    def _source_venv_site_packages(self, source_path: Path) -> list[Path]:
+        site_packages: list[Path] = []
+        for venv_name in (".venv", "venv"):
+            lib_path = source_path / venv_name / "lib"
+            if not lib_path.exists():
+                continue
+            site_packages.extend(sorted(lib_path.glob("python*/site-packages")))
+        return [path for path in site_packages if path.is_dir()]
+
+    def _copy_vendor_package(
+        self, site_packages: Path, vendor_dir: Path, package_name: str
+    ) -> bool:
+        copied_module = False
+        for item in site_packages.iterdir():
+            item_name = item.name
+            item_norm = item_name.lower().replace("-", "_")
+            is_module = item_name == package_name or item_name == f"{package_name}.py"
+            is_metadata = item_norm.startswith(f"{package_name}_") and (
+                item_norm.endswith(".dist_info") or item_norm.endswith(".egg_info")
+            )
+            if not is_module and not is_metadata:
+                continue
+            target = vendor_dir / item_name
+            if target.exists():
+                if target.is_dir():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+            if item.is_dir():
+                shutil.copytree(
+                    item,
+                    target,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "tests"),
+                )
+            else:
+                shutil.copy2(item, target)
+            copied_module = copied_module or is_module
+        return copied_module
+
+    def _vendor_package_name(self, package_spec: str) -> str:
+        name = re.split(r"[<>=!~\[]", package_spec, maxsplit=1)[0].strip()
+        return name.lower().replace("-", "_")
+
+    def _cleanup_vendor_tree(self, vendor_dir: Path):
+        for path in vendor_dir.rglob("__pycache__"):
+            if path.is_dir():
+                shutil.rmtree(path)
+        for path in vendor_dir.rglob("*.pyc"):
+            if path.is_file():
+                path.unlink()
 
     def _webui_service_script(self) -> str:
         return """#!/bin/sh
