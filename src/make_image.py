@@ -67,6 +67,23 @@ def _resolve_target(target: Union[str, TargetConfig]) -> TargetConfig:
     return get_target(target)
 
 
+def _boot_config_text(target: TargetConfig) -> str:
+    lines = [f"kernel={target.kernel_filename}", *target.boot_config_lines]
+    return "\n".join(lines) + "\n"
+
+
+def _validate_boot_files(target: TargetConfig):
+    missing = [
+        rel_path
+        for rel_path in target.required_boot_files
+        if not (BOOT_MNT / rel_path).exists()
+    ]
+    if missing:
+        raise FileNotFoundError(
+            "Boot partition is missing required file(s): " + ", ".join(missing)
+        )
+
+
 def create_img(target: Union[str, TargetConfig] = "pi5"):
     target = _resolve_target(target)
     image_size_mb, boot_size_mb = _image_layout(target)
@@ -136,7 +153,7 @@ unit: sectors
         print(f"Используем loop-устройства: boot={boot_loop}, root={root_loop}")
 
         print("Создаём файловые системы...")
-        run(["mkfs.vfat", boot_loop], use_sudo=True)
+        run(["mkfs.vfat", "-F", "32", "-n", "NETOSBOOT", boot_loop], use_sudo=True)
         run(["mkfs.ext4", root_loop], use_sudo=True)
 
         BOOT_MNT.mkdir(parents=True, exist_ok=True)
@@ -151,7 +168,7 @@ unit: sectors
 
         print("Копируем boot-файлы...")
         if target.install_boot_files:
-            CONFIG_TXT.write_text(f"kernel={target.kernel_filename}\narm_64bit=1\nenable_uart=1\n")
+            CONFIG_TXT.write_text(_boot_config_text(target))
             print(f"Создан {CONFIG_TXT}")
             CMDLINE_TXT.write_text(target.boot_cmdline + "\n")
             print(f"Создан {CMDLINE_TXT}")
@@ -161,6 +178,8 @@ unit: sectors
             run(["cp", str(CONFIG_TXT), str(BOOT_MNT / "config.txt")], use_sudo=True)
         if target.install_boot_files and CMDLINE_TXT.exists():
             run(["cp", str(CMDLINE_TXT), str(BOOT_MNT / "cmdline.txt")], use_sudo=True)
+        if target.install_boot_files:
+            _validate_boot_files(target)
     finally:
         print("Размонтируем...")
         for mountpoint in reversed(mounted):

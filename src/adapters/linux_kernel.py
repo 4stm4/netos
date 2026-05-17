@@ -2,12 +2,17 @@ import logging
 import os
 import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
 from typing import Iterable, Union
 
 
 RPI_REPO_URL = "https://github.com/raspberrypi/linux.git"
 DEFAULT_RPI_BRANCH = "rpi-6.6.y"
+RPI_FIRMWARE_BASE_URL = os.environ.get(
+    "LITAINER_RPI_FIRMWARE_BASE_URL",
+    "https://raw.githubusercontent.com/raspberrypi/firmware/master/boot",
+)
 
 DEFAULT_KERNEL_CONFIG_OPTIONS = (
     "CONFIG_CGROUPS=y",
@@ -39,6 +44,7 @@ class LinuxKernel:
         rootfs_path: Union[Path, str],
         kernel_filename: str = "kernel8.img",
         config_options: Iterable[str] = DEFAULT_KERNEL_CONFIG_OPTIONS,
+        boot_firmware_files: Iterable[str] = (),
     ):
         self.temp_path = Path(temp_path)
         self.rpi_model = rpi_model
@@ -47,6 +53,7 @@ class LinuxKernel:
         self.kernel_filename = kernel_filename
         self.rootfs_path = Path(rootfs_path)
         self.config_options = tuple(config_options)
+        self.boot_firmware_files = tuple(boot_firmware_files)
         prebuilt_kernel = os.environ.get("LITAINER_PREBUILT_KERNEL_IMAGE")
         self.prebuilt_kernel_image = Path(prebuilt_kernel) if prebuilt_kernel else None
 
@@ -228,20 +235,19 @@ class LinuxKernel:
             dest_image = boot_dir / self.kernel_filename
             shutil.copy2(self.kernel_image, dest_image)
             logging.info(f"Скопирован prebuilt Image в {dest_image}; modules_install пропущен.")
-            return
-
-        logging.info("Устанавливаем модули ядра в rootfs...")
-        subprocess.run(
-            [
-                "make",
-                "ARCH=arm64",
-                "CROSS_COMPILE=aarch64-linux-gnu-",
-                f"INSTALL_MOD_PATH={self.rootfs_path}",
-                "modules_install",
-            ],
-            check=True,
-            cwd=self.rpi_repo_path,
-        )
+        else:
+            logging.info("Устанавливаем модули ядра в rootfs...")
+            subprocess.run(
+                [
+                    "make",
+                    "ARCH=arm64",
+                    "CROSS_COMPILE=aarch64-linux-gnu-",
+                    f"INSTALL_MOD_PATH={self.rootfs_path}",
+                    "modules_install",
+                ],
+                check=True,
+                cwd=self.rpi_repo_path,
+            )
 
         boot_dir = self.rootfs_path / "boot"
         boot_dir.mkdir(parents=True, exist_ok=True)
@@ -266,7 +272,43 @@ class LinuxKernel:
             dest_overlays_dir = boot_dir / "overlays"
             if dest_overlays_dir.exists():
                 shutil.rmtree(dest_overlays_dir)
-            shutil.copytree(overlays_src_dir, dest_overlays_dir)
+            dest_overlays_dir.mkdir(parents=True)
+            copied = 0
+            for pattern in ("*.dtbo", "*.dtbo.disabled", "overlay_map.dtb", "README*"):
+                for overlay_file in overlays_src_dir.glob(pattern):
+                    if overlay_file.is_file():
+                        shutil.copy2(overlay_file, dest_overlays_dir / overlay_file.name)
+                        copied += 1
+            if copied == 0:
+                logging.error(f"Готовые overlay-файлы не найдены в {overlays_src_dir}")
             logging.info(f"Скопированы overlays в {dest_overlays_dir}")
         else:
             logging.error(f"Директория overlays не найдена: {overlays_src_dir}")
+
+        self._install_boot_firmware(boot_dir)
+
+    def _install_boot_firmware(self, boot_dir: Path):
+        if not self.boot_firmware_files:
+            return
+
+        source_dir_raw = os.environ.get("LITAINER_RPI_FIRMWARE_DIR")
+        source_dir = Path(source_dir_raw).expanduser() if source_dir_raw else None
+        cache_dir = self.temp_path / "rpi_firmware_boot"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        for rel_path in self.boot_firmware_files:
+            destination = boot_dir / rel_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if source_dir:
+                source = source_dir / rel_path
+                if not source.exists():
+                    raise FileNotFoundError(f"Raspberry Pi firmware file not found: {source}")
+            else:
+                source = cache_dir / rel_path
+                if not source.exists():
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    url = f"{RPI_FIRMWARE_BASE_URL.rstrip('/')}/{rel_path}"
+                    logging.info("Downloading Raspberry Pi firmware: %s", url)
+                    urllib.request.urlretrieve(url, source)
+            shutil.copy2(source, destination)
+            logging.info("Скопирован firmware-файл: %s -> %s", source, destination)

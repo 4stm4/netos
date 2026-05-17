@@ -124,6 +124,77 @@ ANSI_COLOR="1;36"
             self.fs.write_text(Path("etc/group"), "root:x:0:\n")
         self.logger.info("Обновлены базовые конфиги rootfs")
 
+    def install_boot_diagnostics(self, rootfs_path: Path):
+        """Installs first-boot diagnostics that are copied to the FAT boot partition."""
+        sbin_dir = rootfs_path / "usr" / "local" / "sbin"
+        sbin_dir.mkdir(parents=True, exist_ok=True)
+        diag_path = sbin_dir / "netos-boot-diagnostics"
+        diag_path.write_text("""#!/bin/sh
+
+STAGE="${1:-manual}"
+BOOT_MNT="${NETOS_BOOT_MNT:-/boot}"
+BOOT_DEV="${NETOS_BOOT_DEV:-/dev/mmcblk0p1}"
+TMP_LOG="/tmp/netos-${STAGE}.log"
+
+write_section() {
+    echo
+    echo "## $1"
+}
+
+collect_log() {
+    {
+        echo "4stm4 NetOS boot diagnostics"
+        echo "stage=$STAGE"
+        echo "time=$(date 2>/dev/null || true)"
+        write_section "os-release"
+        cat /etc/os-release 2>&1 || true
+        write_section "cmdline"
+        cat /proc/cmdline 2>&1 || true
+        write_section "uname"
+        uname -a 2>&1 || true
+        write_section "mounts"
+        mount 2>&1 || true
+        write_section "partitions"
+        cat /proc/partitions 2>&1 || true
+        write_section "block devices"
+        ls -l /dev/mmc* /dev/sd* /dev/disk/by-* 2>&1 || true
+        write_section "network"
+        ip addr 2>&1 || ifconfig -a 2>&1 || true
+        ip route 2>&1 || route -n 2>&1 || true
+        write_section "processes"
+        ps 2>&1 || true
+        write_section "dmesg"
+        dmesg 2>&1 || true
+    } > "$TMP_LOG"
+}
+
+mount_boot() {
+    mkdir -p "$BOOT_MNT"
+    if mountpoint -q "$BOOT_MNT"; then
+        return 0
+    fi
+    mount -t vfat -o rw,umask=022 "$BOOT_DEV" "$BOOT_MNT" 2>/dev/null && return 0
+    mount "$BOOT_DEV" "$BOOT_MNT" 2>/dev/null && return 0
+    return 1
+}
+
+collect_log
+if mount_boot; then
+    cp "$TMP_LOG" "$BOOT_MNT/netos-${STAGE}.log" 2>/dev/null || true
+    sync
+fi
+exit 0
+""")
+        diag_path.chmod(0o755)
+
+        init_dir = rootfs_path / "etc" / "init.d"
+        init_dir.mkdir(parents=True, exist_ok=True)
+        for name, stage in (("S02netos-bootdiag", "early"), ("S95netos-bootdiag", "late")):
+            init_path = init_dir / name
+            init_path.write_text(f"#!/bin/sh\n/usr/local/sbin/netos-boot-diagnostics {stage}\n")
+            init_path.chmod(0o755)
+        self.logger.info("Установлены boot diagnostics для записи логов на FAT-раздел")
+
     def create_dev_nodes(self, rootfs_path: Path):
         """Создаёт статические устройства /dev/null, /dev/console, /dev/tty, если их нет."""
         dev_dir = rootfs_path / "dev"

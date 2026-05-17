@@ -65,6 +65,7 @@ if __name__ == "__main__":
         ROOTFS_PATH,
         kernel_filename=target.kernel_filename,
         config_options=target.kernel_config_options,
+        boot_firmware_files=target.boot_firmware_files,
     )
 
     logging_adapter.info(f"Собираем target: {target.name} ({target.description})")
@@ -84,6 +85,7 @@ if __name__ == "__main__":
     setup.setup_directories(ROOTFS_PATH)
     setup.write_base_configs(ROOTFS_PATH, hostname=NETOS_HOSTNAME)
     setup.setup_network(ROOTFS_PATH)
+    setup.install_boot_diagnostics(ROOTFS_PATH)
     setup.create_dev_nodes(ROOTFS_PATH)
     linux_kernel.install_kernel()
     setup.install_webui_assets(ROOTFS_PATH)

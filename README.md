@@ -8,7 +8,7 @@
 
 - Рабочий локальный target: `qemu-virt`.
 - Собран и проверен образ: `qemu-virt.img`.
-- Размер raw-образа по умолчанию: `qemu-virt` - 512 MB, `pi5` - 1024 MB.
+- Размер raw-образа по умолчанию: `qemu-virt` - 512 MB, `pi5`/`zero2w` - 1024 MB.
 - Внутри rootfs branding: `NAME="4stm4 NetOS"`, `ID=4stm4-netos`.
 - QEMU boot-test проходит: rootfs монтируется, сеть поднимается, `dropbear` стартует, `ovsdb-server` доступен через host-forward.
 - Для полноценного Open vSwitch datapath еще нужно пересобрать kernel с поддержкой `ovs_datapath`; сейчас OVSDB и `ovs-vswitchd` стартуют, но kernel datapath в текущем prebuilt kernel отсутствует.
@@ -33,6 +33,7 @@
 
 - `qemu-virt` - generic ARM64 QEMU `virt` image для локальной проверки. Output: `qemu-virt.img`.
 - `pi5` - Raspberry Pi 5 / BCM2712 hardware image. Output: `raspi.img`.
+- `zero2w` - Raspberry Pi Zero 2 W / BCM2710 ARM64 hardware image. Output: `raspi-zero2w.img`.
 
 Размеры образов по умолчанию:
 
@@ -40,8 +41,9 @@
 |---|---:|---:|---:|
 | `qemu-virt` | 512 MB | 64 MB | ~447 MB |
 | `pi5` | 1024 MB | 256 MB | ~767 MB |
+| `zero2w` | 1024 MB | 256 MB | ~767 MB |
 
-`qemu-virt` проверен локально. `pi5` требует отдельной проверки на реальном Raspberry Pi 5.
+`qemu-virt` проверен локально. Hardware targets `pi5` и `zero2w` требуют проверки на реальном устройстве.
 
 ## Основные Файлы
 
@@ -56,7 +58,7 @@
 
 ## Как Идет Сборка
 
-1. `src/main.py` выбирает target (`pi5` или `qemu-virt`).
+1. `src/main.py` выбирает target (`pi5`, `zero2w` или `qemu-virt`).
 2. Устанавливаются host-зависимости в Linux build VM. Это зависимости только для сборочной машины.
 3. Готовится kernel:
    - либо собирается из Raspberry Pi Linux sources;
@@ -68,6 +70,36 @@
 8. `make_image.py` создает raw image: boot-раздел + ext4 rootfs.
 
 Buildroot output кэшируется в `temp/buildroot-output-<target>`, поэтому повторная сборка обычно пересобирает только измененные части.
+
+## Сборка Raspberry Pi
+
+Raspberry Pi 5:
+
+```bash
+python3 src/main.py --target pi5
+```
+
+Raspberry Pi Zero 2 W:
+
+```bash
+python3 src/main.py --target zero2w
+```
+
+Для `zero2w` сборка дополнительно кладет на boot-раздел firmware-файлы Raspberry Pi (`bootcode.bin`, `start.elf`, `fixup.dat`) и включает Wi-Fi пакеты. Если нужен headless-доступ по Wi-Fi, задайте параметры сети на этапе сборки:
+
+```bash
+NETOS_WIFI_COUNTRY=US \
+NETOS_WIFI_SSID='my-wifi' \
+NETOS_WIFI_PSK='my-password' \
+python3 src/main.py --target zero2w
+```
+
+Если firmware уже скачан локально, можно использовать его вместо загрузки из GitHub:
+
+```bash
+LITAINER_RPI_FIRMWARE_DIR=/path/to/raspberrypi-firmware/boot \
+python3 src/main.py --target zero2w
+```
 
 ## Требования К Среде
 
@@ -271,9 +303,13 @@ limactl copy --backend=scp \
 - `LITAINER_KERNEL_BRANCH` - branch Raspberry Pi Linux; default `rpi-6.6.y`.
 - `LITAINER_KERNEL_TARBALL_URL` - кастомный tarball kernel sources.
 - `LITAINER_PREBUILT_KERNEL_IMAGE` - путь к готовому kernel `Image`, чтобы пропустить сборку kernel.
+- `LITAINER_RPI_FIRMWARE_BASE_URL` - base URL для Raspberry Pi boot firmware; default `https://raw.githubusercontent.com/raspberrypi/firmware/master/boot`.
+- `LITAINER_RPI_FIRMWARE_DIR` - локальный каталог с Raspberry Pi boot firmware вместо скачивания.
 - `QEMU_BIN` - путь/имя QEMU binary для `src/run_qemu.py`.
 - `NETOS_IMAGE_SIZE_MB` - override размера raw image в MB.
 - `NETOS_BOOT_SIZE_MB` - override размера boot-раздела в MB.
+- `NETOS_ETH0_ADDRESS`, `NETOS_ETH0_NETMASK`, `NETOS_ETH0_GATEWAY`, `NETOS_ETH0_DNS` - статическая сеть для `eth0`; если `NETOS_ETH0_ADDRESS` не задан, используется DHCP.
+- `NETOS_WIFI_COUNTRY`, `NETOS_WIFI_SSID`, `NETOS_WIFI_PSK` - Wi-Fi provisioning для `wlan0`, полезно для `zero2w`.
 - `NETOS_WEBUI_ENABLED` - включает/выключает Web UI bootstrap; default `1`.
 - `NETOS_WEBUI_EMBED` - запекать Testum source в образ; default `1`.
 - `NETOS_WEBUI_PORT` - порт Web UI; default `8080`.
@@ -295,6 +331,7 @@ limactl copy --backend=scp \
 
 - `qemu-virt.img` - локальный QEMU image.
 - `raspi.img` - Raspberry Pi 5 image.
+- `raspi-zero2w.img` - Raspberry Pi Zero 2 W image.
 - `container/` - собранный rootfs перед упаковкой в image.
 - `temp/rpi_linux/arch/arm64/boot/Image` - kernel image.
 - `temp/buildroot-output-<target>/images/rootfs.tar` - Buildroot rootfs archive.
@@ -328,6 +365,7 @@ python3 src/run_qemu.py --target qemu-virt --host-port 6641 --timeout 300 --chec
 - Пересобрать kernel с нужными OVS datapath/netfilter modules и проверить datapath, а не только OVSDB.
 - Проверить Testum Web UI в полном NetOS boot после rebuild: миграции, startup command и `/health`.
 - Проверить `pi5` target на реальном Raspberry Pi 5.
+- Проверить `zero2w` target на реальном Raspberry Pi Zero 2 W.
 - Ввести release pipeline: pinned source cache/mirror, SBOM, license manifest, checksums, подпись artifacts.
 - Продумать обновления: A/B partitions или atomic rootfs update с rollback.
 - Разделить immutable OS и persistent config/data partition.
