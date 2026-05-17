@@ -272,7 +272,7 @@ echo "{NETOS_HOSTNAME}" > "$TARGET_DIR/etc/hostname"
             "BR2_TARGET_ROOTFS_TAR_NONE=y",
         ]
 
-        if self.target.name == "pi5":
+        if self.target.name == "pi5" and os.environ.get("NETOS_INCLUDE_QEMU", "0") == "1":
             package_lines.extend(
                 [
                     "BR2_PACKAGE_QEMU=y",
