@@ -24,6 +24,7 @@ wheels/
 container/
 temp/
 raspi.img
+raspi-zero2w.img
 qemu-virt.img
 container_setup.log
 share/python-wheels/

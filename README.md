@@ -94,6 +94,21 @@ NETOS_WIFI_PSK='my-password' \
 python3 src/main.py --target zero2w
 ```
 
+Можно не пересобирать образ ради Wi-Fi: после записи SD-карты положите на FAT boot-раздел файл `wpa_supplicant.conf` или `netos-wifi.conf`. При первом boot `/etc/init.d/S39wifi` скопирует его в `/etc/wpa_supplicant.conf`, поднимет `wlan0` и запустит DHCP.
+
+Минимальный `wpa_supplicant.conf`:
+
+```conf
+ctrl_interface=/var/run/wpa_supplicant
+update_config=1
+country=US
+
+network={
+    ssid="my-wifi"
+    psk="my-password"
+}
+```
+
 Если firmware уже скачан локально, можно использовать его вместо загрузки из GitHub:
 
 ```bash
@@ -310,6 +325,7 @@ limactl copy --backend=scp \
 - `NETOS_BOOT_SIZE_MB` - override размера boot-раздела в MB.
 - `NETOS_ETH0_ADDRESS`, `NETOS_ETH0_NETMASK`, `NETOS_ETH0_GATEWAY`, `NETOS_ETH0_DNS` - статическая сеть для `eth0`; если `NETOS_ETH0_ADDRESS` не задан, используется DHCP.
 - `NETOS_WIFI_COUNTRY`, `NETOS_WIFI_SSID`, `NETOS_WIFI_PSK` - Wi-Fi provisioning для `wlan0`, полезно для `zero2w`.
+- `NETOS_WIFI_BOOTSTRAP` - включает `/etc/init.d/S39wifi`, который может взять `wpa_supplicant.conf` или `netos-wifi.conf` с boot-раздела; default `1`.
 - `NETOS_WEBUI_ENABLED` - включает/выключает Web UI bootstrap; default `1`.
 - `NETOS_WEBUI_EMBED` - запекать Testum source в образ; default `1`.
 - `NETOS_WEBUI_PORT` - порт Web UI; default `8080`.

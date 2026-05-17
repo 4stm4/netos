@@ -506,6 +506,7 @@ exit 0
                     str(vendor_dir),
                     "--no-deps",
                     "--no-compile",
+                    "--ignore-requires-python",
                     *remaining,
                 ],
                 check=True,

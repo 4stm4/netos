@@ -39,6 +39,9 @@ QEMU_VIRT_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
 
 
 ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
+    "CONFIG_KVM=n",
+    "CONFIG_VFIO=n",
+    "CONFIG_VFIO_PCI=n",
     "CONFIG_RFKILL=y",
     "CONFIG_WIRELESS=y",
     "CONFIG_CFG80211=y",
@@ -63,6 +66,7 @@ class TargetConfig:
     buildroot_package_lines: tuple[str, ...]
     install_boot_files: bool
     kernel_config_options: tuple[str, ...]
+    build_kernel_modules: bool
     image_size_mb: int
     boot_size_mb: int
     qemu_machine: Optional[str] = None
@@ -107,6 +111,7 @@ TARGETS = {
         buildroot_package_lines=(),
         install_boot_files=True,
         kernel_config_options=COMMON_KERNEL_OPTIONS,
+        build_kernel_modules=True,
         image_size_mb=1024,
         boot_size_mb=256,
     ),
@@ -155,6 +160,7 @@ TARGETS = {
         ),
         install_boot_files=True,
         kernel_config_options=ZERO2W_KERNEL_OPTIONS,
+        build_kernel_modules=False,
         image_size_mb=1024,
         boot_size_mb=256,
     ),
@@ -173,6 +179,7 @@ TARGETS = {
         buildroot_package_lines=(),
         install_boot_files=False,
         kernel_config_options=QEMU_VIRT_KERNEL_OPTIONS,
+        build_kernel_modules=True,
         image_size_mb=512,
         boot_size_mb=64,
         qemu_machine="virt",

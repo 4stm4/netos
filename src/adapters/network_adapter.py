@@ -11,6 +11,8 @@ class NetworkAdapter(NetworkConfiguratorPort):
         wifi_ssid = os.environ.get("NETOS_WIFI_SSID")
         wifi_psk = os.environ.get("NETOS_WIFI_PSK", "")
         wifi_country = os.environ.get("NETOS_WIFI_COUNTRY", "US")
+        wifi_bootstrap = os.environ.get("NETOS_WIFI_BOOTSTRAP", "1")
+        wifi_bootstrap_enabled = wifi_bootstrap.lower() not in {"0", "false", "no", "off"}
 
         if address:
             lines = [
@@ -35,8 +37,8 @@ class NetworkAdapter(NetworkConfiguratorPort):
                 "auto eth0\n"
                 "iface eth0 inet dhcp\n"
             )
-        if wifi_ssid:
-            interfaces_config += "\nauto wlan0\niface wlan0 inet dhcp\n"
+        if wifi_ssid or wifi_bootstrap_enabled:
+            interfaces_config += "\nallow-hotplug wlan0\niface wlan0 inet dhcp\n"
 
         network_dir = rootfs_path / "etc/network"
         network_dir.mkdir(parents=True, exist_ok=True)
@@ -45,6 +47,8 @@ class NetworkAdapter(NetworkConfiguratorPort):
             (rootfs_path / "etc" / "resolv.conf").write_text(f"nameserver {dns.split()[0]}\n")
         if wifi_ssid:
             self._write_wifi_config(rootfs_path, wifi_ssid, wifi_psk, wifi_country)
+        elif wifi_bootstrap_enabled:
+            self._install_wifi_init(rootfs_path)
 
     def _write_wifi_config(self, rootfs_path: Path, ssid: str, psk: str, country: str):
         def wpa_quote(value: str) -> str:
@@ -67,18 +71,49 @@ class NetworkAdapter(NetworkConfiguratorPort):
         )
         (rootfs_path / "etc" / "wpa_supplicant.conf").chmod(0o600)
 
+        self._install_wifi_init(rootfs_path)
+
+    def _install_wifi_init(self, rootfs_path: Path):
         init_dir = rootfs_path / "etc" / "init.d"
         init_dir.mkdir(parents=True, exist_ok=True)
         init_path = init_dir / "S39wifi"
         init_path.write_text("""#!/bin/sh
 
 CONF=/etc/wpa_supplicant.conf
-[ -f "$CONF" ] || exit 0
+BOOT_MNT="${NETOS_BOOT_MNT:-/boot}"
+BOOT_DEV="${NETOS_BOOT_DEV:-/dev/mmcblk0p1}"
+
+mount_boot() {
+    mkdir -p "$BOOT_MNT"
+    mountpoint -q "$BOOT_MNT" && return 0
+    mount -t vfat -o ro "$BOOT_DEV" "$BOOT_MNT" 2>/dev/null && return 0
+    mount "$BOOT_DEV" "$BOOT_MNT" 2>/dev/null && return 0
+    return 1
+}
+
+provision_conf() {
+    [ -f "$CONF" ] && return 0
+    mount_boot || return 1
+    for candidate in "$BOOT_MNT/wpa_supplicant.conf" "$BOOT_MNT/netos-wifi.conf"; do
+        if [ -f "$candidate" ]; then
+            cp "$candidate" "$CONF"
+            chmod 600 "$CONF"
+            return 0
+        fi
+    done
+    return 1
+}
+
+provision_conf || exit 0
 command -v wpa_supplicant >/dev/null 2>&1 || exit 0
 
 mkdir -p /var/run/wpa_supplicant
 rfkill unblock wifi 2>/dev/null || true
 modprobe brcmfmac 2>/dev/null || true
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    ip link show wlan0 >/dev/null 2>&1 && break
+    sleep 1
+done
 ip link set wlan0 up 2>/dev/null || true
 
 if ! pgrep -f "wpa_supplicant.*wlan0" >/dev/null 2>&1; then

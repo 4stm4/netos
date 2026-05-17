@@ -45,6 +45,7 @@ class LinuxKernel:
         kernel_filename: str = "kernel8.img",
         config_options: Iterable[str] = DEFAULT_KERNEL_CONFIG_OPTIONS,
         boot_firmware_files: Iterable[str] = (),
+        build_modules: bool = True,
     ):
         self.temp_path = Path(temp_path)
         self.rpi_model = rpi_model
@@ -54,8 +55,28 @@ class LinuxKernel:
         self.rootfs_path = Path(rootfs_path)
         self.config_options = tuple(config_options)
         self.boot_firmware_files = tuple(boot_firmware_files)
+        self.build_modules = build_modules
         prebuilt_kernel = os.environ.get("LITAINER_PREBUILT_KERNEL_IMAGE")
         self.prebuilt_kernel_image = Path(prebuilt_kernel) if prebuilt_kernel else None
+
+    @staticmethod
+    def _format_config_option(option: str) -> str:
+        option = option.strip()
+        key, sep, value = option.partition("=")
+        if sep and value == "n" and key.startswith("CONFIG_"):
+            return f"# {key} is not set"
+        return option
+
+    def _kernel_modules_enabled(self) -> bool:
+        config_path = self.rpi_repo_path / ".config"
+        if not config_path.exists():
+            return True
+        for line in config_path.read_text().splitlines():
+            if line == "CONFIG_MODULES=y":
+                return True
+            if line == "# CONFIG_MODULES is not set":
+                return False
+        return True
 
     def download_kernel(self):
         """Загружает или обновляет исходники ядра Raspberry Pi."""
@@ -162,7 +183,16 @@ class LinuxKernel:
 
         if self.rpi_model == "defconfig":
             logging.info("Используем стандартный ARM64 defconfig.")
-            subprocess.run(["make", "ARCH=arm64", "defconfig"], check=True, cwd=self.rpi_repo_path)
+            subprocess.run(
+                [
+                    "make",
+                    "ARCH=arm64",
+                    "CROSS_COMPILE=aarch64-linux-gnu-",
+                    "defconfig",
+                ],
+                check=True,
+                cwd=self.rpi_repo_path,
+            )
             return
 
         rpi_config_path = self.rpi_repo_path / "arch" / "arm64" / "configs" / self.rpi_model
@@ -173,7 +203,16 @@ class LinuxKernel:
                 raise FileNotFoundError(f"Конфигурация {self.rpi_model} не найдена в репозитории Raspberry Pi!")
 
         logging.info("Используем конфигурацию для настройки ядра...")
-        subprocess.run(["make", "ARCH=arm64", self.rpi_model], check=True, cwd=self.rpi_repo_path)
+        subprocess.run(
+            [
+                "make",
+                "ARCH=arm64",
+                "CROSS_COMPILE=aarch64-linux-gnu-",
+                self.rpi_model,
+            ],
+            check=True,
+            cwd=self.rpi_repo_path,
+        )
 
     def configure_kernel(self):
         """
@@ -190,7 +229,16 @@ class LinuxKernel:
             self._use_rpi_config()
         except FileNotFoundError as e:
             logging.error(f"Ошибка: {e}. Переходим к стандартной конфигурации.")
-            subprocess.run(["make", "ARCH=arm64", "defconfig"], check=True, cwd=self.rpi_repo_path)
+            subprocess.run(
+                [
+                    "make",
+                    "ARCH=arm64",
+                    "CROSS_COMPILE=aarch64-linux-gnu-",
+                    "defconfig",
+                ],
+                check=True,
+                cwd=self.rpi_repo_path,
+            )
 
         # Применяем дополнительные изменения
         config_path = self.rpi_repo_path / ".config"
@@ -198,8 +246,17 @@ class LinuxKernel:
             config_file.write("\n")
             config_file.write("# Litainer kernel configuration\n")
             for option in self.config_options:
-                config_file.write(f"{option}\n")
-        subprocess.run(["make", "ARCH=arm64", "olddefconfig"], check=True, cwd=self.rpi_repo_path)
+                config_file.write(f"{self._format_config_option(option)}\n")
+        subprocess.run(
+            [
+                "make",
+                "ARCH=arm64",
+                "CROSS_COMPILE=aarch64-linux-gnu-",
+                "olddefconfig",
+            ],
+            check=True,
+            cwd=self.rpi_repo_path,
+        )
 
 
     def compile_kernel(self):
@@ -213,15 +270,20 @@ class LinuxKernel:
 
         logging.info("Собираем ядро для текущего target...")
         nproc = os.cpu_count() or 1
+        make_targets = ["Image", "dtbs"]
+        if self.build_modules and self._kernel_modules_enabled():
+            make_targets.insert(1, "modules")
+        elif not self.build_modules:
+            logging.info("Сборка kernel modules отключена для target, собираем только Image и DTB.")
+        else:
+            logging.info("CONFIG_MODULES отключен, сборку kernel modules пропускаем.")
         subprocess.run(
             [
                 "make",
                 f"-j{nproc}",
                 "ARCH=arm64",
                 "CROSS_COMPILE=aarch64-linux-gnu-",
-                "Image",
-                "modules",
-                "dtbs",
+                *make_targets,
             ],
             check=True,
             cwd=self.rpi_repo_path,
@@ -236,18 +298,23 @@ class LinuxKernel:
             shutil.copy2(self.kernel_image, dest_image)
             logging.info(f"Скопирован prebuilt Image в {dest_image}; modules_install пропущен.")
         else:
-            logging.info("Устанавливаем модули ядра в rootfs...")
-            subprocess.run(
-                [
-                    "make",
-                    "ARCH=arm64",
-                    "CROSS_COMPILE=aarch64-linux-gnu-",
-                    f"INSTALL_MOD_PATH={self.rootfs_path}",
-                    "modules_install",
-                ],
-                check=True,
-                cwd=self.rpi_repo_path,
-            )
+            if self.build_modules and self._kernel_modules_enabled():
+                logging.info("Устанавливаем модули ядра в rootfs...")
+                subprocess.run(
+                    [
+                        "make",
+                        "ARCH=arm64",
+                        "CROSS_COMPILE=aarch64-linux-gnu-",
+                        f"INSTALL_MOD_PATH={self.rootfs_path}",
+                        "modules_install",
+                    ],
+                    check=True,
+                    cwd=self.rpi_repo_path,
+                )
+            elif not self.build_modules:
+                logging.info("Сборка kernel modules отключена для target, modules_install пропускаем.")
+            else:
+                logging.info("CONFIG_MODULES отключен, modules_install пропускаем.")
 
         boot_dir = self.rootfs_path / "boot"
         boot_dir.mkdir(parents=True, exist_ok=True)
