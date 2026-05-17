@@ -22,6 +22,7 @@ def install_dependencies():
         "patch",
         "perl",
         "python3",
+        "python3-pip",
         "rsync",
         "file",
         "cpio",
