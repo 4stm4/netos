@@ -26,6 +26,7 @@ temp/
 raspi.img
 raspi-zero2w.img
 qemu-virt.img
+*.qcow2
 container_setup.log
 share/python-wheels/
 *.egg-info/
