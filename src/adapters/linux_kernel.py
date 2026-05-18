@@ -269,7 +269,7 @@ class LinuxKernel:
             return
 
         logging.info("Собираем ядро для текущего target...")
-        nproc = os.cpu_count() or 1
+        jobs = os.environ.get("NETOS_BUILD_JOBS", str(os.cpu_count() or 1))
         make_targets = ["Image", "dtbs"]
         if self.build_modules and self._kernel_modules_enabled():
             make_targets.insert(1, "modules")
@@ -280,7 +280,7 @@ class LinuxKernel:
         subprocess.run(
             [
                 "make",
-                f"-j{nproc}",
+                f"-j{jobs}",
                 "ARCH=arm64",
                 "CROSS_COMPILE=aarch64-linux-gnu-",
                 *make_targets,

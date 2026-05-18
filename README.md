@@ -311,7 +311,7 @@ limactl copy --backend=scp \
 ## Полезные Переменные
 
 - `NETOS_VERSION` - версия в `/etc/os-release`; default `0.1.0`.
-- `NETOS_BUILD_JOBS` - количество parallel jobs для Buildroot.
+- `NETOS_BUILD_JOBS` - количество parallel jobs для kernel и Buildroot.
 - `NETOS_BUILDROOT_VERSION` - версия Buildroot; default `2026.02.1`.
 - `NETOS_BUILDROOT_URL` и `NETOS_BUILDROOT_SHA256` - кастомный источник Buildroot.
 - `NETOS_OPENVSWITCH_VERSION` - версия Open vSwitch package.
