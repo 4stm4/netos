@@ -1,6 +1,6 @@
-# netOS
+# 4stm4 netOS
 
-netOS - это собираемая из исходников ARM64 appliance OS для сетевого/виртуализационного узла. Проект собирает Linux kernel, минимальный userspace через Buildroot, Open vSwitch/OVSDB, системную OVSDB-схему, агенты управления и готовый raw-образ диска.
+4stm4 netOS - это собираемая из исходников ARM64 appliance OS для сетевого/виртуализационного узла. Проект собирает Linux kernel, минимальный userspace через Buildroot, Open vSwitch/OVSDB, системную OVSDB-схему, агенты управления и готовый raw-образ диска.
 
 Целевая система не является Ubuntu/Debian rootfs. Внутри target rootfs нет `apt`, `dpkg`, `mmdebstrap`, `debootstrap` и Docker-зависимостей. Ubuntu/Linux VM используется только как среда сборки на хосте.
 
@@ -9,14 +9,14 @@ netOS - это собираемая из исходников ARM64 appliance OS
 - Рабочий локальный target: `qemu-virt`.
 - Собран и проверен образ: `qemu-virt.img`.
 - Размер raw-образа по умолчанию: `qemu-virt` - 512 MB, `pi5`/`zero2w` - 1024 MB.
-- Внутри rootfs branding: `NAME="netOS"`, `ID=netos`.
+- Внутри rootfs branding: `NAME="4stm4 netOS"`, `ID=4stm4-netos`.
 - QEMU boot-test проходит: rootfs монтируется, сеть поднимается, `dropbear` стартует, `ovsdb-server` доступен через host-forward.
 - Для полноценного Open vSwitch datapath еще нужно пересобрать kernel с поддержкой `ovs_datapath`; сейчас OVSDB и `ovs-vswitchd` стартуют, но kernel datapath в текущем prebuilt kernel отсутствует.
 
 ## Что Собирается
 
 - ARM64 Linux kernel.
-- Buildroot rootfs `netOS`.
+- Buildroot rootfs `4stm4 netOS`.
 - Open vSwitch userspace: `ovsdb-server`, `ovs-vswitchd`, CLI tools и Python-модули.
 - `/etc/os-release`, `/usr/lib/os-release`, hostname, issue и базовые системные конфиги.
 - OVSDB schema: `src/schema/system.ovsschema`.
@@ -66,7 +66,7 @@ netOS - это собираемая из исходников ARM64 appliance OS
 4. `NetOSBuildrootBuilder` генерирует Buildroot external tree в `temp/netos-buildroot-external`.
 5. Buildroot собирает userspace и архив `rootfs.tar`.
 6. Rootfs распаковывается в `container/`.
-7. Проект накладывает netOS branding, network config, device nodes, kernel, offline Testum Web UI, OVSDB schema, CLI и agents.
+7. Проект накладывает 4stm4 netOS branding, network config, device nodes, kernel, offline Testum Web UI, OVSDB schema, CLI и agents.
 8. `make_image.py` создает raw image: boot-раздел + ext4 rootfs.
 
 Buildroot output кэшируется в `temp/buildroot-output-<target>`, поэтому повторная сборка обычно пересобирает только измененные части.
@@ -131,7 +131,7 @@ Docker для сборки не нужен.
 
 ## Пакетный Менеджер
 
-Внутри netOS нет runtime package manager: `apt`, `dpkg`, `apk`, `opkg` и `rpm` намеренно не входят в target rootfs. Это не Ubuntu/Alpine, а appliance image на Buildroot.
+Внутри 4stm4 netOS нет runtime package manager: `apt`, `dpkg`, `apk`, `opkg` и `rpm` намеренно не входят в target rootfs. Это не Ubuntu/Alpine, а appliance image на Buildroot.
 
 Пакеты добавляются в сборку через `src/adapters/netos_buildroot.py`, метод `_defconfig()`, после чего образ пересобирается:
 
@@ -139,7 +139,7 @@ Docker для сборки не нужен.
 python3 src/main.py --target qemu-virt
 ```
 
-Buildroot сам скачает, сконфигурирует и встроит выбранные пакеты в rootfs. На уже запущенной netOS устанавливать системные пакеты штатным способом нельзя; для изменений нужно менять конфиг сборки и выпускать новый image.
+Buildroot сам скачает, сконфигурирует и встроит выбранные пакеты в rootfs. На уже запущенной 4stm4 netOS устанавливать системные пакеты штатным способом нельзя; для изменений нужно менять конфиг сборки и выпускать новый image.
 
 ## Сборка `qemu-virt`
 
@@ -180,9 +180,9 @@ python3 src/run_qemu.py --target qemu-virt --host-port 6641 --check-webui
 
 ## Web UI Панель
 
-В сборку добавлен offline bundle для Testum Web UI без Docker. Исходники панели запекаются в rootfs на этапе сборки, поэтому на первом boot netOS не скачивает `install.sh` и не делает `git clone`.
+В сборку добавлен offline bundle для Testum Web UI без Docker. Исходники панели запекаются в rootfs на этапе сборки, поэтому на первом boot 4stm4 netOS не скачивает `install.sh` и не делает `git clone`.
 
-Так как netOS использует BusyBox init, а не systemd, автозапуск сделан через SysV init-script:
+Так как 4stm4 netOS использует BusyBox init, а не systemd, автозапуск сделан через SysV init-script:
 
 - приложение: `/opt/testum`;
 - конфиг: `/etc/netos/webui.env`;
@@ -379,7 +379,7 @@ python3 src/run_qemu.py --target qemu-virt --host-port 6641 --timeout 300 --chec
 ## Что Еще Нужно Для Продакшена
 
 - Пересобрать kernel с нужными OVS datapath/netfilter modules и проверить datapath, а не только OVSDB.
-- Проверить Testum Web UI в полном netOS boot после rebuild: миграции, startup command и `/health`.
+- Проверить Testum Web UI в полном 4stm4 netOS boot после rebuild: миграции, startup command и `/health`.
 - Проверить `pi5` target на реальном Raspberry Pi 5.
 - Проверить `zero2w` target на реальном Raspberry Pi Zero 2 W.
 - Ввести release pipeline: pinned source cache/mirror, SBOM, license manifest, checksums, подпись artifacts.

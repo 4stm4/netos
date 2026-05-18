@@ -143,7 +143,7 @@ write_section() {
 
 collect_log() {
     {
-        echo "netOS boot diagnostics"
+        echo "4stm4 netOS boot diagnostics"
         echo "stage=$STAGE"
         echo "time=$(date 2>/dev/null || true)"
         write_section "os-release"

@@ -161,7 +161,7 @@ def wait_for_qemu(
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="Run a netOS image in QEMU")
+    parser = argparse.ArgumentParser(description="Run a 4stm4 netOS image in QEMU")
     parser.add_argument("--target", choices=sorted(TARGETS), default="qemu-virt")
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--host-port", type=int, default=6640)

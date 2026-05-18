@@ -256,7 +256,7 @@ class LinuxKernel:
         config_path = self.rpi_repo_path / ".config"
         with config_path.open("a") as config_file:
             config_file.write("\n")
-            config_file.write("# netOS kernel configuration\n")
+            config_file.write("# 4stm4 netOS kernel configuration\n")
             for option in self.config_options:
                 config_file.write(f"{self._format_config_option(option)}\n")
         subprocess.run(
