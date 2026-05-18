@@ -29,7 +29,7 @@ CLI_PATH = SCRIPT_DIR / "cli.py"
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="Build Litainer rootfs/kernel/image")
+    parser = argparse.ArgumentParser(description="Build netOS rootfs/kernel/image")
     parser.add_argument(
         "--target",
         choices=sorted(TARGETS),

@@ -4,14 +4,25 @@ import shutil
 import subprocess
 import urllib.request
 from pathlib import Path
-from typing import Iterable, Union
+from typing import Iterable, Optional, Union
 
 
 RPI_REPO_URL = "https://github.com/raspberrypi/linux.git"
 DEFAULT_RPI_BRANCH = "rpi-6.6.y"
-RPI_FIRMWARE_BASE_URL = os.environ.get(
-    "LITAINER_RPI_FIRMWARE_BASE_URL",
+
+
+def _env(name: str, default: Optional[str] = None, legacy_name: Optional[str] = None) -> Optional[str]:
+    if name in os.environ:
+        return os.environ[name]
+    if legacy_name and legacy_name in os.environ:
+        return os.environ[legacy_name]
+    return default
+
+
+RPI_FIRMWARE_BASE_URL = _env(
+    "NETOS_RPI_FIRMWARE_BASE_URL",
     "https://raw.githubusercontent.com/raspberrypi/firmware/master/boot",
+    legacy_name="LITAINER_RPI_FIRMWARE_BASE_URL",
 )
 
 DEFAULT_KERNEL_CONFIG_OPTIONS = (
@@ -56,7 +67,7 @@ class LinuxKernel:
         self.config_options = tuple(config_options)
         self.boot_firmware_files = tuple(boot_firmware_files)
         self.build_modules = build_modules
-        prebuilt_kernel = os.environ.get("LITAINER_PREBUILT_KERNEL_IMAGE")
+        prebuilt_kernel = _env("NETOS_PREBUILT_KERNEL_IMAGE", legacy_name="LITAINER_PREBUILT_KERNEL_IMAGE")
         self.prebuilt_kernel_image = Path(prebuilt_kernel) if prebuilt_kernel else None
 
     @staticmethod
@@ -98,10 +109,11 @@ class LinuxKernel:
             shutil.rmtree(self.rpi_repo_path)
 
         if not git_dir.exists():
-            branch = os.environ.get("LITAINER_KERNEL_BRANCH", DEFAULT_RPI_BRANCH)
-            tarball_url = os.environ.get(
-                "LITAINER_KERNEL_TARBALL_URL",
+            branch = _env("NETOS_KERNEL_BRANCH", DEFAULT_RPI_BRANCH, legacy_name="LITAINER_KERNEL_BRANCH")
+            tarball_url = _env(
+                "NETOS_KERNEL_TARBALL_URL",
                 f"https://github.com/raspberrypi/linux/archive/refs/heads/{branch}.tar.gz",
+                legacy_name="LITAINER_KERNEL_TARBALL_URL",
             )
             if self._download_kernel_tarball(tarball_url, branch):
                 return
@@ -244,7 +256,7 @@ class LinuxKernel:
         config_path = self.rpi_repo_path / ".config"
         with config_path.open("a") as config_file:
             config_file.write("\n")
-            config_file.write("# Litainer kernel configuration\n")
+            config_file.write("# netOS kernel configuration\n")
             for option in self.config_options:
                 config_file.write(f"{self._format_config_option(option)}\n")
         subprocess.run(
@@ -358,7 +370,7 @@ class LinuxKernel:
         if not self.boot_firmware_files:
             return
 
-        source_dir_raw = os.environ.get("LITAINER_RPI_FIRMWARE_DIR")
+        source_dir_raw = _env("NETOS_RPI_FIRMWARE_DIR", legacy_name="LITAINER_RPI_FIRMWARE_DIR")
         source_dir = Path(source_dir_raw).expanduser() if source_dir_raw else None
         cache_dir = self.temp_path / "rpi_firmware_boot"
         cache_dir.mkdir(parents=True, exist_ok=True)

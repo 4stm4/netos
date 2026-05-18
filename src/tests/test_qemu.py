@@ -9,7 +9,7 @@ RUN_QEMU = PROJECT_ROOT / "src" / "run_qemu.py"
 
 
 def main():
-    target = os.environ.get("LITAINER_TARGET", "qemu-virt")
+    target = os.environ.get("NETOS_TARGET") or os.environ.get("LITAINER_TARGET", "qemu-virt")
     cmd = [
         sys.executable,
         str(RUN_QEMU),

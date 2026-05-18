@@ -192,7 +192,7 @@ unit: sectors
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="Create Litainer disk image from container/")
+    parser = argparse.ArgumentParser(description="Create netOS disk image from container/")
     parser.add_argument("--target", choices=sorted(TARGETS), default="pi5")
     return parser
 

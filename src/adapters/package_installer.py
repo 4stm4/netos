@@ -39,7 +39,8 @@ def install_dependencies():
         "util-linux",
         "qemu-system-aarch64",
     ]
-    if not os.environ.get("LITAINER_PREBUILT_KERNEL_IMAGE"):
+    prebuilt_kernel = os.environ.get("NETOS_PREBUILT_KERNEL_IMAGE") or os.environ.get("LITAINER_PREBUILT_KERNEL_IMAGE")
+    if not prebuilt_kernel:
         dependencies.extend(
             [
                 # Linux kernel build

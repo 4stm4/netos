@@ -26,7 +26,7 @@ OPENVSWITCH_SHA256 = "6e97ec7dfdda5b40b5103946d53e4f8b11edf66049fedbdcb323e1af67
 OPENVSWITCH_LICENSE_SHA256 = "f41f887b04dd604250193ddd88691ecd168dacdecca2d0d6581d8840e3f0b0dc"
 
 class NetOSBuildrootBuilder:
-    """Builds the 4stm4 NetOS rootfs from source using Buildroot."""
+    """Builds the netOS rootfs from source using Buildroot."""
 
     def __init__(self, rootfs_path: Path, temp_path: Path, target: TargetConfig):
         self.rootfs_path = Path(rootfs_path)
@@ -98,7 +98,7 @@ class NetOSBuildrootBuilder:
 
         (self.external_dir / "external.desc").write_text(
             "name: NETOS\n"
-            "desc: 4stm4 NetOS source-built root filesystem\n"
+            "desc: netOS source-built root filesystem\n"
         )
         (self.external_dir / "Config.in").write_text(
             'source "$BR2_EXTERNAL_NETOS_PATH/package/openvswitch/Config.in"\n'
@@ -131,7 +131,7 @@ class NetOSBuildrootBuilder:
 \tselect BR2_PACKAGE_PYTHON3_ZLIB
 \thelp
 \t  Open vSwitch userspace tools, ovsdb-server, ovs-vswitchd and
-\t  Python modules required by 4stm4 NetOS agents.
+\t  Python modules required by netOS agents.
 
 \t  https://www.openvswitch.org/
 
@@ -317,7 +317,7 @@ echo "{NETOS_HOSTNAME}" > "$TARGET_DIR/etc/hostname"
 
     def _build_rootfs(self):
         jobs = os.environ.get("NETOS_BUILD_JOBS", str(os.cpu_count() or 1))
-        logging.info("Building 4stm4 NetOS rootfs with Buildroot (-j%s)", jobs)
+        logging.info("Building netOS rootfs with Buildroot (-j%s)", jobs)
         self._clear_target_os_release_links()
         subprocess.run(
             ["make", "-C", str(self.buildroot_dir), f"O={self.output_dir}", f"-j{jobs}"],

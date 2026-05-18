@@ -91,7 +91,7 @@ class ContainerSetup:
 
         return all_deps
 
-    def write_base_configs(self, rootfs_path: Path, hostname: str = "litainer"):
+    def write_base_configs(self, rootfs_path: Path, hostname: str = "netos"):
         """Создаёт базовые системные конфиги в rootfs."""
         fstab = """proc /proc proc defaults 0 0
 sysfs /sys sysfs defaults 0 0
@@ -143,7 +143,7 @@ write_section() {
 
 collect_log() {
     {
-        echo "4stm4 NetOS boot diagnostics"
+        echo "netOS boot diagnostics"
         echo "stage=$STAGE"
         echo "time=$(date 2>/dev/null || true)"
         write_section "os-release"

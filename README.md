@@ -1,6 +1,6 @@
-# 4stm4 NetOS
+# netOS
 
-4stm4 NetOS - это собираемая из исходников ARM64 appliance OS для сетевого/виртуализационного узла. Проект собирает Linux kernel, минимальный userspace через Buildroot, Open vSwitch/OVSDB, системную OVSDB-схему, агенты управления и готовый raw-образ диска.
+netOS - это собираемая из исходников ARM64 appliance OS для сетевого/виртуализационного узла. Проект собирает Linux kernel, минимальный userspace через Buildroot, Open vSwitch/OVSDB, системную OVSDB-схему, агенты управления и готовый raw-образ диска.
 
 Целевая система не является Ubuntu/Debian rootfs. Внутри target rootfs нет `apt`, `dpkg`, `mmdebstrap`, `debootstrap` и Docker-зависимостей. Ubuntu/Linux VM используется только как среда сборки на хосте.
 
@@ -9,14 +9,14 @@
 - Рабочий локальный target: `qemu-virt`.
 - Собран и проверен образ: `qemu-virt.img`.
 - Размер raw-образа по умолчанию: `qemu-virt` - 512 MB, `pi5`/`zero2w` - 1024 MB.
-- Внутри rootfs branding: `NAME="4stm4 NetOS"`, `ID=4stm4-netos`.
+- Внутри rootfs branding: `NAME="netOS"`, `ID=netos`.
 - QEMU boot-test проходит: rootfs монтируется, сеть поднимается, `dropbear` стартует, `ovsdb-server` доступен через host-forward.
 - Для полноценного Open vSwitch datapath еще нужно пересобрать kernel с поддержкой `ovs_datapath`; сейчас OVSDB и `ovs-vswitchd` стартуют, но kernel datapath в текущем prebuilt kernel отсутствует.
 
 ## Что Собирается
 
 - ARM64 Linux kernel.
-- Buildroot rootfs `4stm4 NetOS`.
+- Buildroot rootfs `netOS`.
 - Open vSwitch userspace: `ovsdb-server`, `ovs-vswitchd`, CLI tools и Python-модули.
 - `/etc/os-release`, `/usr/lib/os-release`, hostname, issue и базовые системные конфиги.
 - OVSDB schema: `src/schema/system.ovsschema`.
@@ -62,11 +62,11 @@
 2. Устанавливаются host-зависимости в Linux build VM. Это зависимости только для сборочной машины.
 3. Готовится kernel:
    - либо собирается из Raspberry Pi Linux sources;
-   - либо используется готовый `Image` из `LITAINER_PREBUILT_KERNEL_IMAGE`.
+   - либо используется готовый `Image` из `NETOS_PREBUILT_KERNEL_IMAGE`.
 4. `NetOSBuildrootBuilder` генерирует Buildroot external tree в `temp/netos-buildroot-external`.
 5. Buildroot собирает userspace и архив `rootfs.tar`.
 6. Rootfs распаковывается в `container/`.
-7. Проект накладывает NetOS branding, network config, device nodes, kernel, offline Testum Web UI, OVSDB schema, CLI и agents.
+7. Проект накладывает netOS branding, network config, device nodes, kernel, offline Testum Web UI, OVSDB schema, CLI и agents.
 8. `make_image.py` создает raw image: boot-раздел + ext4 rootfs.
 
 Buildroot output кэшируется в `temp/buildroot-output-<target>`, поэтому повторная сборка обычно пересобирает только измененные части.
@@ -112,7 +112,7 @@ network={
 Если firmware уже скачан локально, можно использовать его вместо загрузки из GitHub:
 
 ```bash
-LITAINER_RPI_FIRMWARE_DIR=/path/to/raspberrypi-firmware/boot \
+NETOS_RPI_FIRMWARE_DIR=/path/to/raspberrypi-firmware/boot \
 python3 src/main.py --target zero2w
 ```
 
@@ -131,7 +131,7 @@ Docker для сборки не нужен.
 
 ## Пакетный Менеджер
 
-Внутри 4stm4 NetOS нет runtime package manager: `apt`, `dpkg`, `apk`, `opkg` и `rpm` намеренно не входят в target rootfs. Это не Ubuntu/Alpine, а appliance image на Buildroot.
+Внутри netOS нет runtime package manager: `apt`, `dpkg`, `apk`, `opkg` и `rpm` намеренно не входят в target rootfs. Это не Ubuntu/Alpine, а appliance image на Buildroot.
 
 Пакеты добавляются в сборку через `src/adapters/netos_buildroot.py`, метод `_defconfig()`, после чего образ пересобирается:
 
@@ -139,7 +139,7 @@ Docker для сборки не нужен.
 python3 src/main.py --target qemu-virt
 ```
 
-Buildroot сам скачает, сконфигурирует и встроит выбранные пакеты в rootfs. На уже запущенной NetOS устанавливать системные пакеты штатным способом нельзя; для изменений нужно менять конфиг сборки и выпускать новый image.
+Buildroot сам скачает, сконфигурирует и встроит выбранные пакеты в rootfs. На уже запущенной netOS устанавливать системные пакеты штатным способом нельзя; для изменений нужно менять конфиг сборки и выпускать новый image.
 
 ## Сборка `qemu-virt`
 
@@ -152,7 +152,7 @@ python3 src/main.py --target qemu-virt
 Если kernel уже собран и нужно переиспользовать готовый `Image`:
 
 ```bash
-LITAINER_PREBUILT_KERNEL_IMAGE=/path/to/Image \
+NETOS_PREBUILT_KERNEL_IMAGE=/path/to/Image \
 NETOS_BUILD_JOBS=3 \
 python3 src/main.py --target qemu-virt
 ```
@@ -180,9 +180,9 @@ python3 src/run_qemu.py --target qemu-virt --host-port 6641 --check-webui
 
 ## Web UI Панель
 
-В сборку добавлен offline bundle для Testum Web UI без Docker. Исходники панели запекаются в rootfs на этапе сборки, поэтому на первом boot NetOS не скачивает `install.sh` и не делает `git clone`.
+В сборку добавлен offline bundle для Testum Web UI без Docker. Исходники панели запекаются в rootfs на этапе сборки, поэтому на первом boot netOS не скачивает `install.sh` и не делает `git clone`.
 
-Так как NetOS использует BusyBox init, а не systemd, автозапуск сделан через SysV init-script:
+Так как netOS использует BusyBox init, а не systemd, автозапуск сделан через SysV init-script:
 
 - приложение: `/opt/testum`;
 - конфиг: `/etc/netos/webui.env`;
@@ -276,25 +276,24 @@ qemu-system-aarch64 -M virt -cpu cortex-a72 -m 1024 \
 
 Если порт `6641` или `8080` занят, выберите другой host-port.
 
-## Сборка На Этом Mac Через Lima
+## Сборка На Remote Builder
 
-Фактическая сборка выполнялась в Lima VM `litainer`, в каталоге `~/litainer-netos`. После изменения файлов в macOS-каталоге проекта нужно синхронизировать их в VM или пересоздать VM-копию проекта.
+Полная сборка выполняется на Linux. Для этого можно использовать отдельную Raspberry Pi или Linux VM с SSD.
 
-Пример запуска внутри VM:
+Пример для remote builder:
 
 ```bash
-limactl shell litainer -- sh -lc 'cd ~/litainer-netos && \
-  LITAINER_PREBUILT_KERNEL_IMAGE=/Users/aleksejzaharcenko/work/litainer/temp/rpi_linux/arch/arm64/boot/Image \
-  NETOS_BUILD_JOBS=3 \
-  python3 src/main.py --target qemu-virt'
+ssh rpi4-codex
+cd /mnt/build-ssd/netos-build/netos
+NETOS_BUILD_JOBS=2 python3 src/main.py --target zero2w
 ```
 
-Копирование готового образа из VM на host:
+Если нужна Lima VM на macOS, создайте отдельный instance, синхронизируйте проект внутрь VM и запускайте те же команды сборки уже в Linux-окружении.
+
+Копирование готового образа с remote builder на host:
 
 ```bash
-limactl copy --backend=scp \
-  litainer:/home/aleksejzaharcenko.guest/litainer-netos/qemu-virt.img \
-  ./qemu-virt.img
+scp rpi4-codex:/mnt/build-ssd/netos-build/netos/raspi-zero2w.img .
 ```
 
 ## Что Менять В Конфигах
@@ -315,11 +314,12 @@ limactl copy --backend=scp \
 - `NETOS_BUILDROOT_VERSION` - версия Buildroot; default `2026.02.1`.
 - `NETOS_BUILDROOT_URL` и `NETOS_BUILDROOT_SHA256` - кастомный источник Buildroot.
 - `NETOS_OPENVSWITCH_VERSION` - версия Open vSwitch package.
-- `LITAINER_KERNEL_BRANCH` - branch Raspberry Pi Linux; default `rpi-6.6.y`.
-- `LITAINER_KERNEL_TARBALL_URL` - кастомный tarball kernel sources.
-- `LITAINER_PREBUILT_KERNEL_IMAGE` - путь к готовому kernel `Image`, чтобы пропустить сборку kernel.
-- `LITAINER_RPI_FIRMWARE_BASE_URL` - base URL для Raspberry Pi boot firmware; default `https://raw.githubusercontent.com/raspberrypi/firmware/master/boot`.
-- `LITAINER_RPI_FIRMWARE_DIR` - локальный каталог с Raspberry Pi boot firmware вместо скачивания.
+- `NETOS_KERNEL_BRANCH` - branch Raspberry Pi Linux; default `rpi-6.6.y`.
+- `NETOS_KERNEL_TARBALL_URL` - кастомный tarball kernel sources.
+- `NETOS_PREBUILT_KERNEL_IMAGE` - путь к готовому kernel `Image`, чтобы пропустить сборку kernel.
+- `NETOS_RPI_FIRMWARE_BASE_URL` - base URL для Raspberry Pi boot firmware; default `https://raw.githubusercontent.com/raspberrypi/firmware/master/boot`.
+- `NETOS_RPI_FIRMWARE_DIR` - локальный каталог с Raspberry Pi boot firmware вместо скачивания.
+- Старые aliases `LITAINER_*` пока поддерживаются для совместимости, но новые команды должны использовать `NETOS_*`.
 - `QEMU_BIN` - путь/имя QEMU binary для `src/run_qemu.py`.
 - `NETOS_IMAGE_SIZE_MB` - override размера raw image в MB.
 - `NETOS_BOOT_SIZE_MB` - override размера boot-раздела в MB.
@@ -379,7 +379,7 @@ python3 src/run_qemu.py --target qemu-virt --host-port 6641 --timeout 300 --chec
 ## Что Еще Нужно Для Продакшена
 
 - Пересобрать kernel с нужными OVS datapath/netfilter modules и проверить datapath, а не только OVSDB.
-- Проверить Testum Web UI в полном NetOS boot после rebuild: миграции, startup command и `/health`.
+- Проверить Testum Web UI в полном netOS boot после rebuild: миграции, startup command и `/health`.
 - Проверить `pi5` target на реальном Raspberry Pi 5.
 - Проверить `zero2w` target на реальном Raspberry Pi Zero 2 W.
 - Ввести release pipeline: pinned source cache/mirror, SBOM, license manifest, checksums, подпись artifacts.
