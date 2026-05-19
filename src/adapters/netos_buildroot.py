@@ -47,10 +47,17 @@ else:
 class NetOSBuildrootBuilder:
     """Builds the 4stm4 netOS rootfs from source using Buildroot."""
 
-    def __init__(self, rootfs_path: Path, temp_path: Path, target: TargetConfig):
+    def __init__(
+        self,
+        rootfs_path: Path,
+        temp_path: Path,
+        target: TargetConfig,
+        extra_packages: "list[str] | tuple[str, ...] | None" = None,
+    ):
         self.rootfs_path = Path(rootfs_path)
         self.temp_path = Path(temp_path)
         self.target = target
+        self.extra_packages: list[str] = list(extra_packages) if extra_packages else []
         self.buildroot_dir = self.temp_path / f"buildroot-{BUILDROOT_VERSION}"
         self.external_dir = self.temp_path / "netos-buildroot-external"
         self.output_dir = self.temp_path / f"buildroot-output-{target.name}"
@@ -296,6 +303,9 @@ fi
         ]
 
         package_lines.extend(self.target.buildroot_package_lines)
+
+        if self.extra_packages:
+            package_lines.extend(self.extra_packages)
 
         if self.target.name == "pi5" and os.environ.get("NETOS_INCLUDE_QEMU", "0") == "1":
             package_lines.extend(
