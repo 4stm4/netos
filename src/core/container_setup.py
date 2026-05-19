@@ -118,8 +118,28 @@ ANSI_COLOR="1;36"
         usr_os_release.write_text(os_release)
         etc_os_release.symlink_to(Path("../usr/lib/os-release"))
         self.fs.write_text(Path("etc/issue"), f"{NETOS_NAME} {NETOS_VERSION} \\n \\l\n\n")
-        if not (rootfs_path / "etc" / "passwd").exists():
-            self.fs.write_text(Path("etc/passwd"), "root:x:0:0:root:/root:/bin/bash\n")
+        passwd_path = rootfs_path / "etc" / "passwd"
+        if not passwd_path.exists():
+            self.fs.write_text(Path("etc/passwd"), "root::0:0:root:/root:/bin/sh\n")
+        else:
+            lines = passwd_path.read_text().splitlines()
+            passwd_path.write_text(
+                "\n".join(
+                    "root::0:0:root:/root:/bin/sh" if line.startswith("root:") else line
+                    for line in lines
+                )
+                + "\n"
+            )
+        shadow_path = rootfs_path / "etc" / "shadow"
+        if shadow_path.exists():
+            lines = shadow_path.read_text().splitlines()
+            shadow_path.write_text(
+                "\n".join(
+                    "root::::::::" if line.startswith("root:") else line
+                    for line in lines
+                )
+                + "\n"
+            )
         if not (rootfs_path / "etc" / "group").exists():
             self.fs.write_text(Path("etc/group"), "root:x:0:\n")
         self.logger.info("Обновлены базовые конфиги rootfs")

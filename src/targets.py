@@ -27,9 +27,15 @@ COMMON_KERNEL_OPTIONS = (
 
 
 QEMU_VIRT_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
+    "CONFIG_KVM=n",
+    "CONFIG_VHOST_NET=n",
+    "CONFIG_VFIO=n",
+    "CONFIG_VFIO_PCI=n",
     "CONFIG_PCI=y",
+    "CONFIG_PCI_HOST_GENERIC=y",
     "CONFIG_VIRTIO=y",
     "CONFIG_VIRTIO_PCI=y",
+    "CONFIG_VIRTIO_MMIO=y",
     "CONFIG_VIRTIO_BLK=y",
     "CONFIG_VIRTIO_NET=y",
     "CONFIG_SERIAL_AMBA_PL011=y",
@@ -167,7 +173,7 @@ TARGETS = {
     "qemu-virt": TargetConfig(
         name="qemu-virt",
         description="Generic ARM64 QEMU virt image for local agent/OVSDB testing",
-        kernel_defconfig="defconfig",
+        kernel_defconfig="bcm2711_defconfig",
         kernel_filename="Image",
         image_name="qemu-virt.img",
         boot_config_lines=(),
@@ -179,7 +185,7 @@ TARGETS = {
         buildroot_package_lines=(),
         install_boot_files=False,
         kernel_config_options=QEMU_VIRT_KERNEL_OPTIONS,
-        build_kernel_modules=True,
+        build_kernel_modules=False,
         image_size_mb=512,
         boot_size_mb=64,
         qemu_machine="virt",

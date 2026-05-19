@@ -196,6 +196,10 @@ cat > "$TARGET_DIR/etc/issue" <<'EOF'
 EOF
 
 echo "{NETOS_HOSTNAME}" > "$TARGET_DIR/etc/hostname"
+sed -i -e 's,^root:[^:]*:,root::,' "$TARGET_DIR/etc/passwd"
+if [ -f "$TARGET_DIR/etc/shadow" ]; then
+    sed -i -e 's,^root:[^:]*:,root::,' "$TARGET_DIR/etc/shadow"
+fi
 """
 
     def _defconfig(self) -> str:
