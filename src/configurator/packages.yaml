@@ -1,0 +1,211 @@
+categories:
+  - id: core
+    name: "Core / userspace"
+    packages:
+      - key: BR2_PACKAGE_BUSYBOX
+        name: busybox
+        description: "Core Unix utilities"
+        size_kb: 800
+        required: true
+      - key: BR2_PACKAGE_BASH
+        name: bash
+        description: "Bash shell"
+        size_kb: 900
+      - key: BR2_PACKAGE_UTIL_LINUX
+        name: util-linux
+        description: "System utilities"
+        size_kb: 2000
+        required: true
+      - key: BR2_PACKAGE_E2FSPROGS
+        name: e2fsprogs
+        description: "ext2/3/4 filesystem tools"
+        size_kb: 1500
+      - key: BR2_PACKAGE_KMOD
+        name: kmod
+        description: "Kernel module tools"
+        size_kb: 300
+      - key: BR2_PACKAGE_CA_CERTIFICATES
+        name: ca-certificates
+        description: "TLS root certificates"
+        size_kb: 400
+
+  - id: networking
+    name: "Networking"
+    packages:
+      - key: BR2_PACKAGE_IPROUTE2
+        name: iproute2
+        description: "ip / ss / tc tools"
+        size_kb: 1200
+        required: true
+      - key: BR2_PACKAGE_IPSET
+        name: ipset
+        description: "IP sets for iptables"
+        size_kb: 200
+      - key: BR2_PACKAGE_NFTABLES
+        name: nftables
+        description: "Modern packet filtering"
+        size_kb: 800
+      - key: BR2_PACKAGE_CONNTRACK_TOOLS
+        name: conntrack-tools
+        description: "Connection tracking"
+        size_kb: 400
+      - key: BR2_PACKAGE_WIREGUARD_TOOLS
+        name: wireguard-tools
+        description: "WireGuard VPN"
+        size_kb: 300
+      - key: BR2_PACKAGE_DNSMASQ
+        name: dnsmasq
+        description: "DNS/DHCP server"
+        size_kb: 600
+      - key: BR2_PACKAGE_VNSTAT
+        name: vnstat
+        description: "Network traffic monitor"
+        size_kb: 300
+      - key: BR2_PACKAGE_TCPDUMP
+        name: tcpdump
+        description: "Packet capture"
+        size_kb: 500
+      - key: BR2_PACKAGE_IFTOP
+        name: iftop
+        description: "Real-time bandwidth monitor"
+        size_kb: 150
+      - key: BR2_PACKAGE_NETHOGS
+        name: nethogs
+        description: "Per-process bandwidth (required by vm_agent)"
+        size_kb: 100
+      - key: BR2_PACKAGE_SOCAT
+        name: socat
+        description: "Socket relay"
+        size_kb: 200
+      - key: BR2_PACKAGE_ETHTOOL
+        name: ethtool
+        description: "NIC diagnostics"
+        size_kb: 200
+      - key: BR2_PACKAGE_BIND
+        name: bind
+        description: "DNS server (BIND9)"
+        size_kb: 4000
+
+  - id: security
+    name: "Security & SSH"
+    packages:
+      - key: BR2_PACKAGE_DROPBEAR
+        name: dropbear
+        description: "Lightweight SSH server/client"
+        size_kb: 400
+        required: true
+      - key: BR2_PACKAGE_LIBCURL
+        name: libcurl
+        description: "HTTP/FTP/SSH client library"
+        size_kb: 1200
+
+  - id: storage
+    name: "Storage / iSCSI"
+    packages:
+      - key: BR2_PACKAGE_OPEN_ISCSI
+        name: open-iscsi
+        description: "iSCSI initiator (required by storage_agent)"
+        size_kb: 800
+        required: true
+
+  - id: ovs_kvm
+    name: "OVS / KVM"
+    packages:
+      - key: BR2_PACKAGE_OPENVSWITCH
+        name: openvswitch
+        description: "Open vSwitch — ovsdb-server, ovs-vswitchd"
+        size_kb: 8000
+        required: true
+
+  - id: python
+    name: "Python runtime"
+    packages:
+      - key: BR2_PACKAGE_PYTHON3
+        name: python3
+        description: "Python interpreter"
+        size_kb: 15000
+        required: true
+      - key: BR2_PACKAGE_PYTHON_PIP
+        name: python-pip
+        description: "pip package manager"
+        size_kb: 2000
+      - key: BR2_PACKAGE_PYTHON_FASTAPI
+        name: python-fastapi
+        description: "FastAPI web framework"
+        size_kb: 800
+      - key: BR2_PACKAGE_PYTHON_UVICORN
+        name: python-uvicorn
+        description: "ASGI server"
+        size_kb: 400
+      - key: BR2_PACKAGE_PYTHON_PYDANTIC
+        name: python-pydantic
+        description: "Data validation"
+        size_kb: 2000
+      - key: BR2_PACKAGE_PYTHON_SQLALCHEMY
+        name: python-sqlalchemy
+        description: "SQL ORM"
+        size_kb: 3000
+      - key: BR2_PACKAGE_PYTHON_ALEMBIC
+        name: python-alembic
+        description: "DB migrations"
+        size_kb: 500
+      - key: BR2_PACKAGE_PYTHON_AIOSQLITE
+        name: python-aiosqlite
+        description: "Async SQLite driver"
+        size_kb: 200
+      - key: BR2_PACKAGE_PYTHON_CRYPTOGRAPHY
+        name: python-cryptography
+        description: "Cryptographic primitives"
+        size_kb: 3000
+      - key: BR2_PACKAGE_PYTHON_HTTPX
+        name: python-httpx
+        description: "Async HTTP client"
+        size_kb: 600
+      - key: BR2_PACKAGE_PYTHON_REQUESTS
+        name: python-requests
+        description: "HTTP client"
+        size_kb: 400
+      - key: BR2_PACKAGE_PYTHON_PYJWT
+        name: python-pyjwt
+        description: "JWT tokens"
+        size_kb: 100
+      - key: BR2_PACKAGE_PYTHON_DOTENV
+        name: python-dotenv
+        description: ".env file loader"
+        size_kb: 100
+      - key: BR2_PACKAGE_PYTHON_PYYAML
+        name: python-pyyaml
+        description: "YAML parser"
+        size_kb: 400
+      - key: BR2_PACKAGE_PYTHON_PASSLIB
+        name: python-passlib
+        description: "Password hashing"
+        size_kb: 300
+      - key: BR2_PACKAGE_PYTHON_BCRYPT
+        name: python-bcrypt
+        description: "bcrypt for passlib"
+        size_kb: 200
+      - key: BR2_PACKAGE_SYSSTAT
+        name: sysstat
+        description: "System performance tools (iostat, sar)"
+        size_kb: 500
+
+  - id: webui
+    name: "Web UI · Testum"
+    packages:
+      - key: BR2_PACKAGE_GIT
+        name: git
+        description: "Git (for Testum source clone)"
+        size_kb: 12000
+      - key: BR2_PACKAGE_PYTHON_STARLETTE
+        name: python-starlette
+        description: "ASGI toolkit (FastAPI dependency)"
+        size_kb: 500
+      - key: BR2_PACKAGE_PYTHON_JINJA2
+        name: python-jinja2
+        description: "Template engine"
+        size_kb: 600
+      - key: BR2_PACKAGE_PYTHON_ITSDANGEROUS
+        name: python-itsdangerous
+        description: "Cryptographic signing"
+        size_kb: 100
