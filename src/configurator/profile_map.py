@@ -10,6 +10,11 @@ def profile_to_env(profile: Profile) -> dict[str, str]:
     # branding
     env["NETOS_VERSION"] = profile.branding.version
     env["NETOS_HOSTNAME"] = profile.branding.hostname
+    if profile.branding.root_password:
+        env["NETOS_ROOT_PASSWORD"] = profile.branding.root_password
+    if profile.branding.ssh_authorized_key:
+        env["NETOS_SSH_AUTHORIZED_KEY"] = profile.branding.ssh_authorized_key
+    env["NETOS_CONSOLE"] = profile.branding.console
 
     # image sizes
     env["NETOS_IMAGE_SIZE_MB"] = str(profile.image.size_mb)
@@ -45,5 +50,12 @@ def profile_to_env(profile: Profile) -> dict[str, str]:
         env["NETOS_WEBUI_ADMIN_PASSWORD"] = profile.webui.admin_password
     env["NETOS_WEBUI_HEALTH_PATH"] = profile.webui.health_path
     env["NETOS_WEBUI_APP_MODULE"] = profile.webui.app_module
+
+    # nervum SDN controller
+    if profile.nervum.enabled:
+        env["NETOS_NERVUM_GIT_URL"] = profile.nervum.git_url
+        env["NETOS_NERVUM_GIT_REF"] = profile.nervum.git_ref
+        if profile.nervum.source == "local":
+            env["NETOS_NERVUM_SOURCE_DIR"] = profile.nervum.source_dir
 
     return env

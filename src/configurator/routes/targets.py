@@ -11,6 +11,9 @@ from src.targets import TARGETS
 router = APIRouter()
 
 
+_WIFI_CAPABLE_TARGETS = {"zero2w"}
+
+
 @router.get("/targets")
 def get_targets():
     result: dict = {}
@@ -32,6 +35,7 @@ def get_targets():
             "build_kernel_modules": t.build_kernel_modules,
             "kernel_config_options": list(t.kernel_config_options),
             "buildroot_package_lines": list(t.buildroot_package_lines),
+            "wifi_capable": name in _WIFI_CAPABLE_TARGETS,
             "status": "verified" if name == "qemu-virt" else "wip",
         }
     return result

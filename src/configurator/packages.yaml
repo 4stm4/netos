@@ -28,6 +28,62 @@ categories:
         name: ca-certificates
         description: "TLS root certificates"
         size_kb: 400
+      - key: BR2_PACKAGE_HTOP
+        name: htop
+        description: "Interactive process viewer"
+        size_kb: 200
+      - key: BR2_PACKAGE_STRACE
+        name: strace
+        description: "System call tracer"
+        size_kb: 500
+      - key: BR2_PACKAGE_LESS
+        name: less
+        description: "Terminal pager"
+        size_kb: 100
+      - key: BR2_PACKAGE_FILE
+        name: file
+        description: "File type detection"
+        size_kb: 200
+      - key: BR2_PACKAGE_DIFFUTILS
+        name: diffutils
+        description: "File comparison utilities"
+        size_kb: 150
+      - key: BR2_PACKAGE_FINDUTILS
+        name: findutils
+        description: "find / xargs utilities"
+        size_kb: 200
+      - key: BR2_PACKAGE_GREP
+        name: grep
+        description: "Pattern search utility"
+        size_kb: 200
+      - key: BR2_PACKAGE_GAWK
+        name: gawk
+        description: "GNU awk text processor"
+        size_kb: 600
+      - key: BR2_PACKAGE_SED
+        name: sed
+        description: "Stream editor"
+        size_kb: 150
+      - key: BR2_PACKAGE_TAR
+        name: tar
+        description: "Archive utility"
+        size_kb: 300
+      - key: BR2_PACKAGE_GZIP
+        name: gzip
+        description: "gzip compression"
+        size_kb: 100
+      - key: BR2_PACKAGE_XZ
+        name: xz-utils
+        description: "xz/lzma compression"
+        size_kb: 400
+      - key: BR2_PACKAGE_LSOF
+        name: lsof
+        description: "List open files"
+        size_kb: 200
+      - key: BR2_PACKAGE_PROCPS_NG
+        name: procps-ng
+        description: "ps / top / free utilities"
+        size_kb: 400
 
   - id: networking
     name: "Networking"
@@ -85,6 +141,80 @@ categories:
         name: bind
         description: "DNS server (BIND9)"
         size_kb: 4000
+      - key: BR2_PACKAGE_IPERF3
+        name: iperf3
+        description: "Network bandwidth testing"
+        size_kb: 200
+      - key: BR2_PACKAGE_NMAP
+        name: nmap
+        description: "Network scanner"
+        size_kb: 2000
+      - key: BR2_PACKAGE_ARPING
+        name: arping
+        description: "ARP-level ping"
+        size_kb: 50
+      - key: BR2_PACKAGE_BRIDGE_UTILS
+        name: bridge-utils
+        description: "Ethernet bridge management"
+        size_kb: 100
+      - key: BR2_PACKAGE_VLAN
+        name: vlan
+        description: "802.1q VLAN tools"
+        size_kb: 100
+      - key: BR2_PACKAGE_BIRD
+        name: bird
+        description: "BGP/OSPF routing daemon"
+        size_kb: 2000
+      - key: BR2_PACKAGE_FRROUTING
+        name: frrouting
+        description: "Dynamic routing suite (FRR)"
+        size_kb: 8000
+        heavy: true
+      - key: BR2_PACKAGE_KEEPALIVED
+        name: keepalived
+        description: "VRRP/LVS high-availability daemon"
+        size_kb: 500
+      - key: BR2_PACKAGE_HAPROXY
+        name: haproxy
+        description: "TCP/HTTP load balancer"
+        size_kb: 2000
+      - key: BR2_PACKAGE_NGINX
+        name: nginx
+        description: "Web server / reverse proxy"
+        size_kb: 1500
+      - key: BR2_PACKAGE_STRONGSWAN
+        name: strongswan
+        description: "IPsec VPN (strongSwan)"
+        size_kb: 3000
+      - key: BR2_PACKAGE_OPENVPN
+        name: openvpn
+        description: "SSL/TLS VPN"
+        size_kb: 500
+      - key: BR2_PACKAGE_CHRONY
+        name: chrony
+        description: "NTP client/server"
+        size_kb: 400
+      - key: BR2_PACKAGE_HOSTAPD
+        name: hostapd
+        description: "Wi-Fi access point daemon"
+        size_kb: 500
+
+  - id: monitoring
+    name: "Monitoring & Observability"
+    packages:
+      - key: BR2_PACKAGE_PROMETHEUS_NODE_EXPORTER
+        name: prometheus-node-exporter
+        description: "Prometheus hardware/OS metrics exporter"
+        size_kb: 8000
+        heavy: true
+      - key: BR2_PACKAGE_COLLECTD
+        name: collectd
+        description: "System metrics collection daemon"
+        size_kb: 1500
+      - key: BR2_PACKAGE_NAGIOS
+        name: nagios
+        description: "Network/host monitoring system"
+        size_kb: 1000
 
   - id: security
     name: "Security & SSH"
@@ -98,6 +228,27 @@ categories:
         name: libcurl
         description: "HTTP/FTP/SSH client library"
         size_kb: 1200
+      - key: BR2_PACKAGE_OPENSSH
+        name: openssh
+        description: "Full-featured SSH server/client"
+        size_kb: 2000
+      - key: BR2_PACKAGE_OPENSSL
+        name: openssl
+        description: "OpenSSL CLI tools"
+        size_kb: 1000
+      - key: BR2_PACKAGE_FAIL2BAN
+        name: fail2ban
+        description: "Brute-force protection via log analysis"
+        size_kb: 500
+      - key: BR2_PACKAGE_IPTABLES
+        name: iptables
+        description: "Legacy netfilter firewall"
+        size_kb: 500
+      - key: BR2_PACKAGE_SURICATA
+        name: suricata
+        description: "IDS/IPS engine"
+        size_kb: 8000
+        heavy: true
 
   - id: storage
     name: "Storage / iSCSI"
@@ -107,6 +258,35 @@ categories:
         description: "iSCSI initiator (required by storage_agent)"
         size_kb: 800
         required: true
+      - key: BR2_PACKAGE_LVM2
+        name: lvm2
+        description: "Logical volume manager"
+        size_kb: 1500
+      - key: BR2_PACKAGE_MDADM
+        name: mdadm
+        description: "Software RAID management"
+        size_kb: 300
+      - key: BR2_PACKAGE_BTRFS_PROGS
+        name: btrfs-progs
+        description: "Btrfs filesystem tools"
+        size_kb: 1000
+      - key: BR2_PACKAGE_XFS_PROGS
+        name: xfsprogs
+        description: "XFS filesystem tools"
+        size_kb: 800
+      - key: BR2_PACKAGE_NFSUTILS
+        name: nfs-utils
+        description: "NFS client and server utilities"
+        size_kb: 800
+      - key: BR2_PACKAGE_SAMBA4
+        name: samba
+        description: "SMB/CIFS file sharing (Samba4)"
+        size_kb: 8000
+        heavy: true
+      - key: BR2_PACKAGE_TARGETCLI
+        name: targetcli-fb
+        description: "iSCSI target configuration CLI"
+        size_kb: 500
 
   - id: ovs_kvm
     name: "OVS / KVM"
@@ -116,6 +296,46 @@ categories:
         description: "Open vSwitch — ovsdb-server, ovs-vswitchd"
         size_kb: 8000
         required: true
+      - key: BR2_PACKAGE_QEMU
+        name: qemu
+        description: "QEMU hypervisor (optional, very large)"
+        size_kb: 20000
+        heavy: true
+      - key: BR2_PACKAGE_LIBVIRT
+        name: libvirt
+        description: "VM management library and daemon"
+        size_kb: 5000
+        heavy: true
+      - key: BR2_PACKAGE_KVMTOOL
+        name: kvmtool
+        description: "Lightweight KVM tool"
+        size_kb: 2000
+
+  - id: dev_debug
+    name: "Development & Debug"
+    packages:
+      - key: BR2_PACKAGE_GDB
+        name: gdb
+        description: "GNU debugger"
+        size_kb: 5000
+        heavy: true
+      - key: BR2_PACKAGE_PERF
+        name: perf
+        description: "Linux performance profiler"
+        size_kb: 3000
+      - key: BR2_PACKAGE_VALGRIND
+        name: valgrind
+        description: "Memory error and profiling tool"
+        size_kb: 8000
+        heavy: true
+      - key: BR2_PACKAGE_TCF_AGENT
+        name: tcf-agent
+        description: "Target Communication Framework agent"
+        size_kb: 500
+      - key: BR2_PACKAGE_PYTHON_DEBUGPY
+        name: python-debugpy
+        description: "Python remote debugger (debugpy)"
+        size_kb: 1000
 
   - id: python
     name: "Python runtime"
@@ -189,6 +409,70 @@ categories:
         name: sysstat
         description: "System performance tools (iostat, sar)"
         size_kb: 500
+      - key: BR2_PACKAGE_PYTHON_AIOHTTP
+        name: python-aiohttp
+        description: "Async HTTP framework and client"
+        size_kb: 1000
+      - key: BR2_PACKAGE_PYTHON_CELERY
+        name: python-celery
+        description: "Distributed task queue"
+        size_kb: 800
+      - key: BR2_PACKAGE_PYTHON_PARAMIKO
+        name: python-paramiko
+        description: "SSH client library"
+        size_kb: 400
+      - key: BR2_PACKAGE_PYTHON_NETMIKO
+        name: python-netmiko
+        description: "SSH library for network devices"
+        size_kb: 600
+      - key: BR2_PACKAGE_PYTHON_SCAPY
+        name: python-scapy
+        description: "Packet manipulation and crafting"
+        size_kb: 1500
+      - key: BR2_PACKAGE_PYTHON_NCCLIENT
+        name: python-ncclient
+        description: "NETCONF protocol client"
+        size_kb: 300
+      - key: BR2_PACKAGE_PYTHON_NAPALM
+        name: python-napalm
+        description: "Network automation and abstraction layer"
+        size_kb: 500
+      - key: BR2_PACKAGE_PYTHON_ANSIBLE
+        name: python-ansible
+        description: "IT automation platform (heavy)"
+        size_kb: 15000
+        heavy: true
+      - key: BR2_PACKAGE_PYTHON_PROMETHEUS_CLIENT
+        name: python-prometheus-client
+        description: "Prometheus metrics client"
+        size_kb: 300
+      - key: BR2_PACKAGE_PYTHON_STRUCTLOG
+        name: python-structlog
+        description: "Structured logging library"
+        size_kb: 200
+      - key: BR2_PACKAGE_PYTHON_PYDANTIC_SETTINGS
+        name: python-pydantic-settings
+        description: "Settings management via pydantic"
+        size_kb: 200
+      - key: BR2_PACKAGE_PYTHON_PANDAS
+        name: python-pandas
+        description: "Data analysis library (heavy)"
+        size_kb: 20000
+        heavy: true
+      - key: BR2_PACKAGE_PYTHON_NUMPY
+        name: python-numpy
+        description: "Numerical computing library (heavy)"
+        size_kb: 10000
+        heavy: true
+      - key: BR2_PACKAGE_PYTHON_GRPCIO
+        name: python-grpcio
+        description: "gRPC framework"
+        size_kb: 5000
+        heavy: true
+      - key: BR2_PACKAGE_PYTHON_PROTOBUF
+        name: python-protobuf
+        description: "Protocol Buffers serialization"
+        size_kb: 2000
 
   - id: webui
     name: "Web UI · Testum"

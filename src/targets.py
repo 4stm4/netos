@@ -171,6 +171,40 @@ TARGETS = {
         image_size_mb=1024,
         boot_size_mb=256,
     ),
+    "pi4": TargetConfig(
+        name="pi4",
+        description="Raspberry Pi 4 / BCM2711 hardware image",
+        kernel_defconfig="bcm2711_defconfig",
+        kernel_filename="kernel8.img",
+        image_name="raspi-pi4.img",
+        boot_config_lines=(
+            "arm_64bit=1",
+            "enable_uart=1",
+            "os_check=0",
+            "uart_2ndstage=1",
+            "dtdebug=1",
+            "dtoverlay=vc4-kms-v3d",
+            "max_framebuffers=2",
+        ),
+        boot_cmdline=(
+            "console=serial0,115200 console=tty1 "
+            "root=/dev/mmcblk0p2 rootfstype=ext4 rw fsck.repair=yes rootwait "
+            "loglevel=8 ignore_loglevel printk.time=1"
+        ),
+        required_boot_files=(
+            "config.txt",
+            "cmdline.txt",
+            "kernel8.img",
+            "bcm2711-rpi-4-b.dtb",
+        ),
+        boot_firmware_files=(),
+        buildroot_package_lines=(),
+        install_boot_files=True,
+        kernel_config_options=COMMON_KERNEL_OPTIONS,
+        build_kernel_modules=True,
+        image_size_mb=1024,
+        boot_size_mb=256,
+    ),
     "qemu-virt": TargetConfig(
         name="qemu-virt",
         description="Generic ARM64 QEMU virt image for local agent/OVSDB testing",

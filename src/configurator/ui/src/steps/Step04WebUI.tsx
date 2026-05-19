@@ -13,9 +13,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function Step04WebUI() {
   const { profile, updateProfile } = useStore()
   const webui = profile.webui
+  const nervum = profile.nervum
 
-  function patch(partial: Partial<typeof webui>) {
+  function patchWebui(partial: Partial<typeof webui>) {
     updateProfile({ webui: { ...webui, ...partial } })
+  }
+
+  function patchNervum(partial: Partial<typeof nervum>) {
+    updateProfile({ nervum: { ...nervum, ...partial } })
   }
 
   const envPreview = [
@@ -31,6 +36,13 @@ export function Step04WebUI() {
     ...(webui.admin_password ? [`NETOS_WEBUI_ADMIN_PASSWORD=***`] : []),
     `NETOS_WEBUI_HEALTH_PATH=${webui.health_path}`,
     `NETOS_WEBUI_APP_MODULE=${webui.app_module}`,
+    ...(nervum.enabled
+      ? [
+          `NETOS_NERVUM_GIT_URL=${nervum.git_url}`,
+          `NETOS_NERVUM_GIT_REF=${nervum.git_ref}`,
+          ...(nervum.source === 'local' ? [`NETOS_NERVUM_SOURCE_DIR=${nervum.source_dir}`] : []),
+        ]
+      : []),
   ]
 
   return (
@@ -45,7 +57,7 @@ export function Step04WebUI() {
             {(['git', 'local', 'runtime'] as const).map((src) => (
               <button
                 key={src}
-                onClick={() => patch({ source: src })}
+                onClick={() => patchWebui({ source: src })}
                 style={{
                   padding: '10px 20px',
                   background: webui.source === src ? 'var(--info)22' : 'var(--bg-2)',
@@ -66,10 +78,10 @@ export function Step04WebUI() {
           {webui.source === 'git' && (
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
               <Field label="Git URL">
-                <input value={webui.git_url} onChange={(e) => patch({ git_url: e.target.value })} />
+                <input value={webui.git_url} onChange={(e) => patchWebui({ git_url: e.target.value })} />
               </Field>
               <Field label="Branch / Ref">
-                <input value={webui.git_ref} onChange={(e) => patch({ git_ref: e.target.value })} />
+                <input value={webui.git_ref} onChange={(e) => patchWebui({ git_ref: e.target.value })} />
               </Field>
             </div>
           )}
@@ -79,7 +91,7 @@ export function Step04WebUI() {
               <input
                 placeholder="/path/to/your/app"
                 value={webui.source_dir}
-                onChange={(e) => patch({ source_dir: e.target.value })}
+                onChange={(e) => patchWebui({ source_dir: e.target.value })}
               />
             </Field>
           )}
@@ -105,7 +117,7 @@ export function Step04WebUI() {
           <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 700 }}>Runtime Configuration</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
             <Field label="Data directory">
-              <input value={webui.data_dir} onChange={(e) => patch({ data_dir: e.target.value })} />
+              <input value={webui.data_dir} onChange={(e) => patchWebui({ data_dir: e.target.value })} />
             </Field>
             <Field label="Port">
               <input
@@ -113,23 +125,23 @@ export function Step04WebUI() {
                 min={1}
                 max={65535}
                 value={webui.port}
-                onChange={(e) => patch({ port: Number(e.target.value) })}
+                onChange={(e) => patchWebui({ port: Number(e.target.value) })}
               />
             </Field>
             <Field label="Database URL">
-              <input value={webui.database_url} onChange={(e) => patch({ database_url: e.target.value })} />
+              <input value={webui.database_url} onChange={(e) => patchWebui({ database_url: e.target.value })} />
             </Field>
             <Field label="pip mode">
-              <select value={webui.pip_mode} onChange={(e) => patch({ pip_mode: e.target.value as 'never' | 'auto' })}>
+              <select value={webui.pip_mode} onChange={(e) => patchWebui({ pip_mode: e.target.value as 'never' | 'auto' })}>
                 <option value="never">never (Buildroot packages only)</option>
                 <option value="auto">auto (pip install at boot)</option>
               </select>
             </Field>
             <Field label="App module">
-              <input value={webui.app_module} onChange={(e) => patch({ app_module: e.target.value })} />
+              <input value={webui.app_module} onChange={(e) => patchWebui({ app_module: e.target.value })} />
             </Field>
             <Field label="Health check path">
-              <input value={webui.health_path} onChange={(e) => patch({ health_path: e.target.value })} />
+              <input value={webui.health_path} onChange={(e) => patchWebui({ health_path: e.target.value })} />
             </Field>
           </div>
         </section>
@@ -139,17 +151,105 @@ export function Step04WebUI() {
           <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 700 }}>Admin Credentials</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <Field label="Username">
-              <input value={webui.admin_username} onChange={(e) => patch({ admin_username: e.target.value })} />
+              <input value={webui.admin_username} onChange={(e) => patchWebui({ admin_username: e.target.value })} />
             </Field>
             <Field label="Password">
               <input
                 type="password"
                 placeholder="(leave empty for no auth)"
                 value={webui.admin_password}
-                onChange={(e) => patch({ admin_password: e.target.value })}
+                onChange={(e) => patchWebui({ admin_password: e.target.value })}
               />
             </Field>
           </div>
+        </section>
+
+        {/* Nervum SDN Controller */}
+        <section>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Nervum (SDN Controller)</h3>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 400,
+                textTransform: 'none',
+                letterSpacing: 0,
+                color: 'var(--fg)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={nervum.enabled}
+                onChange={(e) => patchNervum({ enabled: e.target.checked })}
+                style={{ accentColor: 'var(--info)', width: 14, height: 14 }}
+              />
+              {nervum.enabled ? 'Enabled' : 'Disabled'}
+            </label>
+          </div>
+
+          {nervum.enabled && (
+            <>
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background: 'var(--info)10',
+                  border: '1px solid var(--info)33',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 11,
+                  color: 'var(--fg-2)',
+                  marginBottom: 16,
+                  lineHeight: 1.6,
+                }}
+              >
+                SDN Controller — installed as Python package in /opt/testum/.python
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+                {(['git', 'local'] as const).map((src) => (
+                  <button
+                    key={src}
+                    onClick={() => patchNervum({ source: src })}
+                    style={{
+                      padding: '10px 20px',
+                      background: nervum.source === src ? 'var(--info)22' : 'var(--bg-2)',
+                      border: `1px solid ${nervum.source === src ? 'var(--info)' : 'var(--border)'}`,
+                      borderRadius: 'var(--radius)',
+                      color: nervum.source === src ? 'var(--info)' : 'var(--fg-3)',
+                      fontWeight: nervum.source === src ? 600 : 400,
+                      fontSize: 13,
+                    }}
+                  >
+                    {src === 'git' ? 'Git clone' : 'Local dir'}
+                  </button>
+                ))}
+              </div>
+
+              {nervum.source === 'git' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
+                  <Field label="Git URL">
+                    <input value={nervum.git_url} onChange={(e) => patchNervum({ git_url: e.target.value })} />
+                  </Field>
+                  <Field label="Branch / Ref">
+                    <input value={nervum.git_ref} onChange={(e) => patchNervum({ git_ref: e.target.value })} />
+                  </Field>
+                </div>
+              )}
+
+              {nervum.source === 'local' && (
+                <Field label="Source directory path">
+                  <input
+                    placeholder="/path/to/nervum"
+                    value={nervum.source_dir}
+                    onChange={(e) => patchNervum({ source_dir: e.target.value })}
+                  />
+                </Field>
+              )}
+            </>
+          )}
         </section>
       </div>
 
