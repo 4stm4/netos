@@ -21,9 +21,28 @@ BUILDROOT_SHA256 = os.environ.get(
     "a2216fdc46b5e81e529acb9077324f7b4a9403366922f350bf7be67f46231b66",
 )
 
+_OPENVSWITCH_KNOWN_SHA256: dict[str, tuple[str, str]] = {
+    "3.4.1": (
+        "6e97ec7dfdda5b40b5103946d53e4f8b11edf66049fedbdcb323e1af67133de8",
+        "f41f887b04dd604250193ddd88691ecd168dacdecca2d0d6581d8840e3f0b0dc",
+    ),
+}
+
 OPENVSWITCH_VERSION = os.environ.get("NETOS_OPENVSWITCH_VERSION", "3.4.1")
-OPENVSWITCH_SHA256 = "6e97ec7dfdda5b40b5103946d53e4f8b11edf66049fedbdcb323e1af67133de8"
-OPENVSWITCH_LICENSE_SHA256 = "f41f887b04dd604250193ddd88691ecd168dacdecca2d0d6581d8840e3f0b0dc"
+
+if OPENVSWITCH_VERSION not in _OPENVSWITCH_KNOWN_SHA256:
+    _custom_sha256 = os.environ.get("NETOS_OPENVSWITCH_SHA256")
+    _custom_license_sha256 = os.environ.get("NETOS_OPENVSWITCH_LICENSE_SHA256")
+    if not _custom_sha256 or not _custom_license_sha256:
+        raise RuntimeError(
+            f"NETOS_OPENVSWITCH_VERSION={OPENVSWITCH_VERSION} is not a known version. "
+            "Set NETOS_OPENVSWITCH_SHA256 and NETOS_OPENVSWITCH_LICENSE_SHA256 env vars "
+            "with the correct checksums for this version."
+        )
+    OPENVSWITCH_SHA256 = _custom_sha256
+    OPENVSWITCH_LICENSE_SHA256 = _custom_license_sha256
+else:
+    OPENVSWITCH_SHA256, OPENVSWITCH_LICENSE_SHA256 = _OPENVSWITCH_KNOWN_SHA256[OPENVSWITCH_VERSION]
 
 class NetOSBuildrootBuilder:
     """Builds the 4stm4 netOS rootfs from source using Buildroot."""
