@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -10,6 +10,9 @@ class BrandingConfig(BaseModel):
     id: str = "4stm4-netos"
     version: str = "0.1.0"
     hostname: str = "4stm4-netos"
+    root_password: str = ""
+    ssh_authorized_key: str = ""
+    console: Literal["ttyAMA0", "tty1", "both"] = "ttyAMA0"
 
     @field_validator("id")
     @classmethod
@@ -17,6 +20,14 @@ class BrandingConfig(BaseModel):
         import re
         if not re.match(r"^[a-z0-9-]+$", v):
             raise ValueError("id must match ^[a-z0-9-]+$")
+        return v
+
+    @field_validator("hostname")
+    @classmethod
+    def hostname_valid(cls, v: str) -> str:
+        import re
+        if not re.match(r"^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$", v):
+            raise ValueError("hostname must match ^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$")
         return v
 
 
@@ -59,6 +70,14 @@ class WebUIConfig(BaseModel):
     app_module: str = "app.main:app"
 
 
+class NervumConfig(BaseModel):
+    enabled: bool = True
+    source: Literal["git", "local"] = "git"
+    git_url: str = "https://github.com/4stm4/nervum.git"
+    git_ref: str = "main"
+    source_dir: str = ""
+
+
 class ImageConfig(BaseModel):
     size_mb: int = 512
     boot_mb: int = 64
@@ -71,6 +90,7 @@ class Profile(BaseModel):
     network: NetworkConfig = NetworkConfig()
     packages: PackagesConfig = PackagesConfig()
     webui: WebUIConfig = WebUIConfig()
+    nervum: NervumConfig = NervumConfig()
     image: ImageConfig = ImageConfig()
 
 

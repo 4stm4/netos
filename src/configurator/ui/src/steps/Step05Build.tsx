@@ -7,6 +7,7 @@ interface CheckItem {
   id: string
   label: string
   ok: boolean
+  warn?: boolean
   message?: string
 }
 
@@ -17,20 +18,30 @@ interface BuildEvent {
   build_id: string
 }
 
-const STAGES = ['init', 'host_deps', 'kernel', 'buildroot', 'image', 'boot_test']
+const STAGES = ['init', 'host_deps', 'kernel', 'buildroot', 'rootfs_overlay', 'nervum_install', 'image', 'boot_test']
 const STAGE_LABELS: Record<string, string> = {
   init: 'Initializing',
   host_deps: 'Host deps',
   kernel: 'Kernel',
   buildroot: 'Buildroot',
+  rootfs_overlay: 'Rootfs overlay',
+  nervum_install: 'Nervum install',
   image: 'Image',
   boot_test: 'Boot test',
 }
 
 const ETA_MINUTES: Record<string, string> = {
   'qemu-virt': '60–90 min',
+  pi4: '90–150 min',
   pi5: '90–150 min',
   zero2w: '90–150 min',
+}
+
+const TARGET_ARTIFACTS: Record<string, string[]> = {
+  'qemu-virt': ['qemu-virt.img', 'temp/rpi_linux/arch/arm64/boot/Image'],
+  pi4: ['raspi-pi4.img'],
+  pi5: ['raspi.img'],
+  zero2w: ['raspi-zero2w.img'],
 }
 
 function usePreflightChecks() {
@@ -43,8 +54,8 @@ function usePreflightChecks() {
   checks.push({ id: 'id_slug', label: 'Branding ID is valid slug', ok: idOk, message: idOk ? undefined : 'Must match ^[a-z0-9-]+$' })
 
   // 2. Hostname
-  const hostnameOk = /^[a-zA-Z0-9-]+$/.test(profile.branding.hostname)
-  checks.push({ id: 'hostname', label: 'Hostname is valid', ok: hostnameOk, message: hostnameOk ? undefined : 'Only letters, digits and hyphens' })
+  const hostnameOk = /^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/.test(profile.branding.hostname)
+  checks.push({ id: 'hostname', label: 'Hostname is valid', ok: hostnameOk, message: hostnameOk ? undefined : 'Must match ^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$' })
 
   // 3. rootfs > 0
   const rootfs = profile.image.size_mb - profile.image.boot_mb
@@ -65,6 +76,38 @@ function usePreflightChecks() {
   // 6. Version semver
   const versionOk = /^\d+\.\d+\.\d+/.test(profile.branding.version)
   checks.push({ id: 'version', label: 'Version is semver', ok: versionOk, message: versionOk ? undefined : 'Use format x.y.z' })
+
+  // 7. Wi-Fi SSID set on non-zero2w target — warn
+  if (profile.network.wifi.ssid && profile.target !== 'zero2w') {
+    checks.push({
+      id: 'wifi_target_warn',
+      label: 'Wi-Fi provisioning target',
+      ok: true,
+      warn: true,
+      message: `Wi-Fi provisioning applies only to zero2w — SSID will be ignored for ${profile.target}`,
+    })
+  }
+
+  // 8. Root password empty — warn
+  if (!profile.branding.root_password) {
+    checks.push({
+      id: 'root_password_warn',
+      label: 'Root password not set',
+      ok: true,
+      warn: true,
+      message: 'Root is accessible without a password (dev mode)',
+    })
+  }
+
+  // 9. Nervum enabled with local source but empty dir — error
+  if (profile.nervum.enabled && profile.nervum.source === 'local' && !profile.nervum.source_dir) {
+    checks.push({
+      id: 'nervum_local_dir',
+      label: 'Nervum local source directory',
+      ok: false,
+      message: 'Nervum source=local but source_dir is empty — set a path or switch to Git',
+    })
+  }
 
   const hasErrors = checks.some((c) => !c.ok)
   return { checks, hasErrors }
@@ -164,6 +207,7 @@ export function Step05Build() {
 
   const packageCount = profile.packages.enabled.length + profile.packages.custom.length
   const rootfs = profile.image.size_mb - profile.image.boot_mb
+  const artifacts = TARGET_ARTIFACTS[profile.target] ?? [`${profile.target}.img`]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, height: '100%', overflow: 'hidden' }}>
@@ -211,19 +255,26 @@ export function Step05Build() {
             Pre-flight checks
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {checks.map((c) => (
-              <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <span style={{ color: c.ok ? 'var(--ok)' : 'var(--err)', fontSize: 14, marginTop: 1, flexShrink: 0 }}>
-                  {c.ok ? '✓' : '✗'}
-                </span>
-                <div>
-                  <div style={{ fontSize: 12, color: c.ok ? 'var(--fg-2)' : 'var(--fg)' }}>{c.label}</div>
-                  {!c.ok && c.message && (
-                    <div style={{ fontSize: 11, color: 'var(--err)', marginTop: 2 }}>{c.message}</div>
-                  )}
+            {checks.map((c) => {
+              const icon = c.ok ? (c.warn ? '!' : '+') : 'x'
+              const iconColor = c.ok ? (c.warn ? 'var(--warn)' : 'var(--ok)') : 'var(--err)'
+              return (
+                <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <span
+                    className="mono"
+                    style={{ color: iconColor, fontSize: 13, marginTop: 1, flexShrink: 0, fontWeight: 700 }}
+                  >
+                    [{icon}]
+                  </span>
+                  <div>
+                    <div style={{ fontSize: 12, color: c.ok ? 'var(--fg-2)' : 'var(--fg)' }}>{c.label}</div>
+                    {c.message && (
+                      <div style={{ fontSize: 11, color: c.ok ? 'var(--warn)' : 'var(--err)', marginTop: 2 }}>{c.message}</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -305,6 +356,31 @@ export function Step05Build() {
           </div>
           <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
             {progressPct}% — stage: <span style={{ color: 'var(--fg)' }}>{STAGE_LABELS[currentStage] ?? currentStage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Artifacts block shown after successful build */}
+      {buildStatus === 'done' && (
+        <div
+          style={{
+            flexShrink: 0,
+            background: 'var(--ok)12',
+            border: '1px solid var(--ok)44',
+            borderRadius: 'var(--radius)',
+            padding: '14px 16px',
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ok)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Build artifacts
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {artifacts.map((path) => (
+              <div key={path} className="mono" style={{ fontSize: 12, color: 'var(--fg-2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: 'var(--ok)', fontWeight: 700 }}>+</span>
+                <span>{path}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}

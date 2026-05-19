@@ -5,6 +5,9 @@ export interface BrandingConfig {
   id: string
   version: string
   hostname: string
+  root_password: string
+  ssh_authorized_key: string
+  console: 'ttyAMA0' | 'tty1' | 'both'
 }
 
 export interface Eth0Config {
@@ -46,6 +49,14 @@ export interface WebUIConfig {
   app_module: string
 }
 
+export interface NervumConfig {
+  enabled: boolean
+  source: 'git' | 'local'
+  git_url: string
+  git_ref: string
+  source_dir: string
+}
+
 export interface ImageConfig {
   size_mb: number
   boot_mb: number
@@ -58,6 +69,7 @@ export interface Profile {
   network: NetworkConfig
   packages: PackagesConfig
   webui: WebUIConfig
+  nervum: NervumConfig
   image: ImageConfig
 }
 
@@ -69,6 +81,9 @@ const DEFAULT_PROFILE: Profile = {
     id: '4stm4-netos',
     version: '0.1.0',
     hostname: '4stm4-netos',
+    root_password: '',
+    ssh_authorized_key: '',
+    console: 'ttyAMA0',
   },
   network: {
     eth0: { mode: 'dhcp', address: '', gateway: '', dns: '' },
@@ -88,6 +103,13 @@ const DEFAULT_PROFILE: Profile = {
     admin_password: '',
     health_path: '/health',
     app_module: 'app.main:app',
+  },
+  nervum: {
+    enabled: true,
+    source: 'git',
+    git_url: 'https://github.com/4stm4/nervum.git',
+    git_ref: 'main',
+    source_dir: '',
   },
   image: { size_mb: 512, boot_mb: 64 },
 }

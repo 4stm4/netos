@@ -1,7 +1,7 @@
 import React from 'react'
 import { useStore } from '../store'
 
-const WIFI_DISABLED_TARGETS = new Set(['qemu-virt', 'pi5'])
+const WIFI_DISABLED_TARGETS = new Set(['qemu-virt', 'pi5', 'pi4'])
 
 function Field({
   label,
@@ -30,6 +30,9 @@ export function Step02Branding() {
 
   const idError = /^[a-z0-9-]+$/.test(branding.id) ? undefined : 'Must match ^[a-z0-9-]+$'
   const versionError = /^\d+\.\d+\.\d+/.test(branding.version) ? undefined : 'Must be semver (x.y.z)'
+  const hostnameError = /^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/.test(branding.hostname)
+    ? undefined
+    : 'Must match ^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$'
 
   return (
     <div style={{ display: 'flex', gap: 24, height: '100%' }}>
@@ -60,12 +63,90 @@ export function Step02Branding() {
                 style={{ borderColor: versionError ? 'var(--err)' : undefined }}
               />
             </Field>
-            <Field label="Hostname">
+            <Field label="Hostname" error={hostnameError}>
               <input
                 value={branding.hostname}
                 onChange={(e) => updateProfile({ branding: { ...branding, hostname: e.target.value } })}
+                style={{ borderColor: hostnameError ? 'var(--err)' : undefined }}
               />
             </Field>
+          </div>
+        </section>
+
+        {/* Access */}
+        <section>
+          <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 700 }}>Access</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Field label="Root password">
+              <input
+                type="password"
+                placeholder="(leave empty for dev-mode — no password)"
+                value={branding.root_password ?? ''}
+                onChange={(e) => updateProfile({ branding: { ...branding, root_password: e.target.value } })}
+              />
+              {!branding.root_password && (
+                <span style={{ color: 'var(--warn)', fontSize: 11 }}>
+                  Dev mode: root login without password. Set a password for production use.
+                </span>
+              )}
+            </Field>
+            <Field label="SSH Authorized Key (public key)">
+              <textarea
+                rows={3}
+                placeholder="ssh-ed25519 AAAA... user@host"
+                value={branding.ssh_authorized_key ?? ''}
+                onChange={(e) => updateProfile({ branding: { ...branding, ssh_authorized_key: e.target.value } })}
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  resize: 'vertical',
+                  background: 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--fg)',
+                  padding: '8px 10px',
+                  lineHeight: 1.5,
+                }}
+              />
+              <span style={{ color: 'var(--fg-3)', fontSize: 11 }}>
+                Installed to /root/.ssh/authorized_keys
+              </span>
+            </Field>
+          </div>
+        </section>
+
+        {/* Console */}
+        <section>
+          <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 700 }}>Console</h3>
+          <div style={{ display: 'flex', gap: 12 }}>
+            {(['ttyAMA0', 'tty1', 'both'] as const).map((mode) => (
+              <label
+                key={mode}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  cursor: 'pointer',
+                  color: (branding.console ?? 'ttyAMA0') === mode ? 'var(--fg)' : 'var(--fg-3)',
+                  fontWeight: (branding.console ?? 'ttyAMA0') === mode ? 600 : 400,
+                  textTransform: 'none',
+                  fontSize: 13,
+                  letterSpacing: 0,
+                }}
+              >
+                <input
+                  type="radio"
+                  name="console"
+                  value={mode}
+                  checked={(branding.console ?? 'ttyAMA0') === mode}
+                  onChange={() => updateProfile({ branding: { ...branding, console: mode } })}
+                  style={{ accentColor: 'var(--info)', width: 14, height: 14 }}
+                />
+                {mode === 'ttyAMA0' && 'UART (ttyAMA0)'}
+                {mode === 'tty1' && 'HDMI (tty1)'}
+                {mode === 'both' && 'Both'}
+              </label>
+            ))}
           </div>
         </section>
 
@@ -247,8 +328,39 @@ export function Step02Branding() {
           <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.6 }}>
             {branding.hostname} login: <span style={{ color: 'var(--fg)' }}>root</span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>Password: (empty)</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>
+            Password: {branding.root_password ? '(set)' : '(empty — dev mode)'}
+          </div>
         </div>
+
+        {branding.ssh_authorized_key && (
+          <div
+            style={{
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              padding: '14px 16px',
+            }}
+          >
+            <div style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+              ~/.ssh/authorized_keys
+            </div>
+            <pre
+              className="mono"
+              style={{
+                margin: 0,
+                fontSize: 10,
+                color: 'var(--ok)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                lineHeight: 1.5,
+              }}
+            >
+              {branding.ssh_authorized_key.trim().slice(0, 120)}
+              {branding.ssh_authorized_key.trim().length > 120 ? '…' : ''}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   )
