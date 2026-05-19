@@ -25,21 +25,6 @@ RPI_FIRMWARE_BASE_URL = _env(
     legacy_name="LITAINER_RPI_FIRMWARE_BASE_URL",
 )
 
-DEFAULT_KERNEL_CONFIG_OPTIONS = (
-    "CONFIG_CGROUPS=y",
-    "CONFIG_NAMESPACES=y",
-    "CONFIG_OVERLAY_FS=y",
-    "CONFIG_TMPFS=y",
-    "CONFIG_IPV6=y",
-    "CONFIG_KVM=y",
-    "CONFIG_VHOST_NET=y",
-    "CONFIG_VFIO=y",
-    "CONFIG_VFIO_PCI=y",
-    "CONFIG_ISCSI_TCP=y",
-    "CONFIG_MULTIPATH=y",
-    "CONFIG_WATCHDOG=y",
-)
-
 class LinuxKernel:
     rpi_model: str
     temp_path: Path
@@ -54,7 +39,7 @@ class LinuxKernel:
         rpi_model: str,
         rootfs_path: Union[Path, str],
         kernel_filename: str = "kernel8.img",
-        config_options: Iterable[str] = DEFAULT_KERNEL_CONFIG_OPTIONS,
+        config_options: Iterable[str] = (),
         boot_firmware_files: Iterable[str] = (),
         build_modules: bool = True,
     ):
@@ -307,8 +292,10 @@ class LinuxKernel:
             boot_dir = self.rootfs_path / "boot"
             boot_dir.mkdir(parents=True, exist_ok=True)
             dest_image = boot_dir / self.kernel_filename
-            shutil.copy2(self.kernel_image, dest_image)
+            shutil.copy2(self.prebuilt_kernel_image, dest_image)
             logging.info(f"Скопирован prebuilt Image в {dest_image}; modules_install пропущен.")
+            self._install_boot_firmware(boot_dir)
+            return
         else:
             if self.build_modules and self._kernel_modules_enabled():
                 logging.info("Устанавливаем модули ядра в rootfs...")

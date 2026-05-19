@@ -12,6 +12,7 @@ COMMON_KERNEL_OPTIONS = (
     "CONFIG_VHOST_NET=y",
     "CONFIG_VFIO=y",
     "CONFIG_VFIO_PCI=y",
+    "CONFIG_OPENVSWITCH=y",
     "CONFIG_ISCSI_TCP=y",
     "CONFIG_MULTIPATH=y",
     "CONFIG_WATCHDOG=y",
@@ -173,7 +174,7 @@ TARGETS = {
     "qemu-virt": TargetConfig(
         name="qemu-virt",
         description="Generic ARM64 QEMU virt image for local agent/OVSDB testing",
-        kernel_defconfig="bcm2711_defconfig",
+        kernel_defconfig="defconfig",
         kernel_filename="Image",
         image_name="qemu-virt.img",
         boot_config_lines=(),
