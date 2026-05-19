@@ -15,7 +15,7 @@ from targets import TARGETS, TargetConfig, get_target
 
 PROJECT_ROOT = Path(__file__).parent.parent
 KERNEL_IMAGE = PROJECT_ROOT / "temp" / "rpi_linux" / "arch" / "arm64" / "boot" / "Image"
-DEFAULT_READY_MARKERS = {"OVSDB_STARTED", "OVS_VSWITCHD_STARTED", "NET_AGENT_STARTED"}
+DEFAULT_READY_MARKERS = {"OVSDB_STARTED", "OVS_VSWITCHD_STARTED", "NET_AGENT_STARTED", "TESTUM_WEBUI_STARTED"}
 DEFAULT_WEBUI_HEALTH_PATH = "/health"
 
 
@@ -163,7 +163,7 @@ def wait_for_qemu(
 def build_parser():
     parser = argparse.ArgumentParser(description="Run a 4stm4 netOS image in QEMU")
     parser.add_argument("--target", choices=sorted(TARGETS), default="qemu-virt")
-    parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--host-port", type=int, default=6640)
     parser.add_argument("--webui-host-port", type=int, default=8080)
     parser.add_argument("--webui-guest-port", type=int, default=8080)
