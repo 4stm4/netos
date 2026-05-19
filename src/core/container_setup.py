@@ -901,6 +901,63 @@ case "${1:-start}" in
 esac
 """
 
+    def install_nervum_assets(self, rootfs_path: Path):
+        """Клонирует nervum и устанавливает его в vendor-dir testum (/opt/testum/.python)."""
+        import tempfile
+
+        git_url = os.environ.get("NETOS_NERVUM_GIT_URL", "https://github.com/4stm4/nervum.git")
+        git_ref = os.environ.get("NETOS_NERVUM_GIT_REF", "main")
+        source_dir = os.environ.get("NETOS_NERVUM_SOURCE_DIR", "")
+        data_dir = os.environ.get("NETOS_WEBUI_DATA_DIR", "/opt/testum")
+        vendor_packages = os.environ.get(
+            "NETOS_NERVUM_VENDOR_PACKAGES",
+            "pydantic-settings structlog prometheus-client",
+        )
+
+        vendor_dir = rootfs_path / data_dir.lstrip("/") / ".python"
+        vendor_dir.mkdir(parents=True, exist_ok=True)
+
+        source_path = Path(source_dir).expanduser() if source_dir else None
+        if source_path:
+            if not source_path.exists():
+                raise FileNotFoundError(f"NETOS_NERVUM_SOURCE_DIR не найден: {source_path}")
+            self._pip_install_local(source_path, vendor_dir)
+            self.logger.info(f"nervum установлен из {source_path} -> {vendor_dir}")
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_path = Path(tmp) / "nervum"
+                subprocess.run(
+                    ["git", "clone", "--depth=1", "--branch", git_ref, git_url, str(tmp_path)],
+                    check=True,
+                )
+                self._pip_install_local(tmp_path, vendor_dir)
+            self.logger.info(f"nervum клонирован из {git_url}@{git_ref} и установлен в {vendor_dir}")
+
+        packages = [p for p in vendor_packages.split() if p]
+        if packages:
+            subprocess.run(
+                [
+                    sys.executable, "-m", "pip", "install",
+                    "--target", str(vendor_dir),
+                    "--no-deps", "--no-compile", "--ignore-requires-python",
+                    *packages,
+                ],
+                check=True,
+            )
+        self._cleanup_vendor_tree(vendor_dir)
+        self.logger.info(f"nervum и зависимости vendored в {vendor_dir}")
+
+    def _pip_install_local(self, source_path: Path, vendor_dir: Path):
+        subprocess.run(
+            [
+                sys.executable, "-m", "pip", "install",
+                "--target", str(vendor_dir),
+                "--no-deps", "--no-compile", "--ignore-requires-python",
+                str(source_path),
+            ],
+            check=True,
+        )
+
     def install_ovsdb_assets(
         self,
         rootfs_path: Path,
