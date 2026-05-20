@@ -192,6 +192,8 @@ if __name__ == "__main__":
         boot_firmware_files=target.boot_firmware_files,
         build_modules=target.build_kernel_modules,
         kernel_source=target.kernel_source,
+        kernel_arch=target.kernel_arch,
+        cross_compile=target.cross_compile,
     )
 
     logging_adapter.info(f"Собираем target: {target.name} ({target.description})")

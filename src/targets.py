@@ -45,6 +45,24 @@ QEMU_VIRT_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
 )
 
 
+QEMU_X86_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
+    "CONFIG_KVM=n",
+    "CONFIG_VHOST_NET=n",
+    "CONFIG_VFIO=n",
+    "CONFIG_VFIO_PCI=n",
+    "CONFIG_PCI=y",
+    "CONFIG_PCI_MSI=y",
+    "CONFIG_VIRTIO=y",
+    "CONFIG_VIRTIO_PCI=y",
+    "CONFIG_VIRTIO_BLK=y",
+    "CONFIG_VIRTIO_NET=y",
+    "CONFIG_HW_RANDOM_VIRTIO=y",
+    "CONFIG_SERIAL_8250=y",
+    "CONFIG_SERIAL_8250_CONSOLE=y",
+    "CONFIG_SERIAL_8250_PCI=y",
+)
+
+
 ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_KVM=n",
     "CONFIG_VFIO=n",
@@ -76,7 +94,10 @@ class TargetConfig:
     build_kernel_modules: bool
     image_size_mb: int
     boot_size_mb: int
-    kernel_source: str = "rpi"  # "rpi" | "mainline"
+    kernel_source: str = "rpi"       # "rpi" | "mainline"
+    kernel_arch: str = "arm64"       # kernel ARCH= value
+    cross_compile: str = "aarch64-linux-gnu-"  # CROSS_COMPILE= value
+    buildroot_arch: str = "aarch64"  # BR2_<arch>=y in Buildroot defconfig
     qemu_machine: Optional[str] = None
     qemu_cpu: Optional[str] = None
     qemu_root_device: Optional[str] = None
@@ -205,6 +226,32 @@ TARGETS = {
         build_kernel_modules=True,
         image_size_mb=1024,
         boot_size_mb=256,
+    ),
+    "qemu-x86": TargetConfig(
+        name="qemu-x86",
+        description="x86_64 QEMU image — удобен для тестирования на x86-хостах без эмуляции ARM",
+        kernel_defconfig="x86_64_defconfig",
+        kernel_filename="bzImage",
+        image_name="qemu-x86.img",
+        boot_config_lines=(),
+        boot_cmdline=(
+            "console=ttyS0 root=/dev/vda2 rootfstype=ext4 rw rootwait"
+        ),
+        required_boot_files=(),
+        boot_firmware_files=(),
+        buildroot_package_lines=(),
+        install_boot_files=False,
+        kernel_config_options=QEMU_X86_KERNEL_OPTIONS,
+        build_kernel_modules=False,
+        image_size_mb=512,
+        boot_size_mb=64,
+        kernel_source="mainline",
+        kernel_arch="x86",
+        cross_compile="x86_64-linux-gnu-",
+        buildroot_arch="x86_64",
+        qemu_machine="q35",
+        qemu_cpu="qemu64",
+        qemu_root_device="/dev/vda2",
     ),
     "qemu-virt": TargetConfig(
         name="qemu-virt",
