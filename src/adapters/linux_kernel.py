@@ -37,6 +37,15 @@ class LinuxKernel:
     kernel_filename: str
     rootfs_path: Path
 
+    _KERNEL_IMAGE_REL: dict[str, str] = {
+        "arm64": "arch/arm64/boot/Image",
+        "x86":   "arch/x86/boot/bzImage",
+    }
+    _MAKE_IMAGE_TARGET: dict[str, str] = {
+        "arm64": "Image",
+        "x86":   "bzImage",
+    }
+
     def __init__(
         self,
         temp_path: str,
@@ -47,13 +56,18 @@ class LinuxKernel:
         boot_firmware_files: Iterable[str] = (),
         build_modules: bool = True,
         kernel_source: str = "rpi",
+        kernel_arch: str = "arm64",
+        cross_compile: str = "aarch64-linux-gnu-",
     ):
         self.temp_path = Path(temp_path)
         self.rpi_model = rpi_model
         self.kernel_source = kernel_source
+        self.kernel_arch = kernel_arch
+        self.cross_compile = cross_compile
         subdir = "mainline_linux" if kernel_source == "mainline" else "rpi_linux"
         self.rpi_repo_path = self.temp_path / subdir
-        self.kernel_image = self.rpi_repo_path / "arch/arm64/boot/Image"
+        img_rel = self._KERNEL_IMAGE_REL.get(kernel_arch, f"arch/{kernel_arch}/boot/Image")
+        self.kernel_image = self.rpi_repo_path / img_rel
         self.kernel_filename = kernel_filename
         self.rootfs_path = Path(rootfs_path)
         self.config_options = tuple(config_options)
@@ -238,8 +252,8 @@ class LinuxKernel:
             subprocess.run(
                 [
                     "make",
-                    "ARCH=arm64",
-                    "CROSS_COMPILE=aarch64-linux-gnu-",
+                    f"ARCH={self.kernel_arch}",
+                    f"CROSS_COMPILE={self.cross_compile}",
                     "defconfig",
                 ],
                 check=True,
@@ -321,7 +335,8 @@ class LinuxKernel:
 
         logging.info("Собираем ядро для текущего target...")
         jobs = os.environ.get("NETOS_BUILD_JOBS", str(os.cpu_count() or 1))
-        make_targets = ["Image", "dtbs"]
+        img_target = self._MAKE_IMAGE_TARGET.get(self.kernel_arch, "Image")
+        make_targets = [img_target] + (["dtbs"] if self.kernel_arch == "arm64" else [])
         if self.build_modules and self._kernel_modules_enabled():
             make_targets.insert(1, "modules")
         elif not self.build_modules:
@@ -379,7 +394,7 @@ class LinuxKernel:
         else:
             logging.error(f"Image не найден: {self.kernel_image}")
 
-        dtb_src_dir = self.rpi_repo_path / "arch" / "arm64" / "boot" / "dts" / "broadcom"
+        dtb_src_dir = self.rpi_repo_path / "arch" / self.kernel_arch / "boot" / "dts" / "broadcom"
         if dtb_src_dir.exists():
             for dtb_file in dtb_src_dir.glob("*.dtb"):
                 shutil.copy2(dtb_file, boot_dir / dtb_file.name)
@@ -387,7 +402,7 @@ class LinuxKernel:
         else:
             logging.error(f"DTB директория не найдена: {dtb_src_dir}")
 
-        overlays_src_dir = self.rpi_repo_path / "arch" / "arm64" / "boot" / "dts" / "overlays"
+        overlays_src_dir = self.rpi_repo_path / "arch" / self.kernel_arch / "boot" / "dts" / "overlays"
         if overlays_src_dir.exists():
             dest_overlays_dir = boot_dir / "overlays"
             if dest_overlays_dir.exists():

@@ -4,7 +4,8 @@ import { useTargets } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
 
 const TARGET_ABBR: Record<string, string> = {
-  'qemu-virt': 'QEMU',
+  'qemu-virt': 'QEMU·ARM',
+  'qemu-x86': 'QEMU·x86',
   pi5: 'RPi5',
   pi4: 'RPi4',
   zero2w: 'Z2W',
