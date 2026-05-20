@@ -76,6 +76,7 @@ class TargetConfig:
     build_kernel_modules: bool
     image_size_mb: int
     boot_size_mb: int
+    kernel_source: str = "rpi"  # "rpi" | "mainline"
     qemu_machine: Optional[str] = None
     qemu_cpu: Optional[str] = None
     qemu_root_device: Optional[str] = None
@@ -223,6 +224,7 @@ TARGETS = {
         build_kernel_modules=False,
         image_size_mb=512,
         boot_size_mb=64,
+        kernel_source="mainline",
         qemu_machine="virt",
         qemu_cpu="cortex-a72",
         qemu_root_device="/dev/vda2",

@@ -191,6 +191,7 @@ if __name__ == "__main__":
         config_options=target.kernel_config_options,
         boot_firmware_files=target.boot_firmware_files,
         build_modules=target.build_kernel_modules,
+        kernel_source=target.kernel_source,
     )
 
     logging_adapter.info(f"Собираем target: {target.name} ({target.description})")
