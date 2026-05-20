@@ -1,42 +1,15 @@
 import React, { useState, useMemo } from 'react'
 import { useStore } from '../store'
-import { usePackages, type PackageEntry, type PackageCategory } from '../api'
+import { usePackages, useDefaults, type PackageEntry, type PackageCategory } from '../api'
 
-const PRESETS: Record<string, string[]> = {
-  Minimal: [
-    'BR2_PACKAGE_BUSYBOX',
-    'BR2_PACKAGE_IPROUTE2',
-    'BR2_PACKAGE_DROPBEAR',
-    'BR2_PACKAGE_PYTHON3',
-    'BR2_PACKAGE_OPEN_ISCSI',
-    'BR2_PACKAGE_OPENVSWITCH',
-  ],
-  'Full netOS': [
-    'BR2_PACKAGE_BUSYBOX',
-    'BR2_PACKAGE_BASH',
-    'BR2_PACKAGE_UTIL_LINUX',
-    'BR2_PACKAGE_E2FSPROGS',
-    'BR2_PACKAGE_KMOD',
-    'BR2_PACKAGE_CA_CERTIFICATES',
-    'BR2_PACKAGE_IPROUTE2',
-    'BR2_PACKAGE_NFTABLES',
-    'BR2_PACKAGE_CONNTRACK_TOOLS',
-    'BR2_PACKAGE_WIREGUARD_TOOLS',
-    'BR2_PACKAGE_DNSMASQ',
-    'BR2_PACKAGE_TCPDUMP',
-    'BR2_PACKAGE_DROPBEAR',
-    'BR2_PACKAGE_LIBCURL',
-    'BR2_PACKAGE_OPEN_ISCSI',
-    'BR2_PACKAGE_OPENVSWITCH',
-    'BR2_PACKAGE_PYTHON3',
-    'BR2_PACKAGE_PYTHON_PIP',
-    'BR2_PACKAGE_PYTHON_FASTAPI',
-    'BR2_PACKAGE_PYTHON_UVICORN',
-    'BR2_PACKAGE_PYTHON_PYDANTIC',
-    'BR2_PACKAGE_PYTHON_SQLALCHEMY',
-    'BR2_PACKAGE_GIT',
-  ],
-}
+const MINIMAL_PRESET = [
+  'BR2_PACKAGE_BUSYBOX',
+  'BR2_PACKAGE_IPROUTE2',
+  'BR2_PACKAGE_DROPBEAR',
+  'BR2_PACKAGE_PYTHON3',
+  'BR2_PACKAGE_OPEN_ISCSI',
+  'BR2_PACKAGE_OPENVSWITCH',
+]
 
 function fmtSize(kb: number): string {
   if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`
@@ -46,6 +19,7 @@ function fmtSize(kb: number): string {
 export function Step03Packages() {
   const { profile, updateProfile } = useStore()
   const { data: catalogue, isLoading } = usePackages()
+  const { data: defaultsData } = useDefaults()
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [customInput, setCustomInput] = useState('')
@@ -106,7 +80,12 @@ export function Step03Packages() {
   }
 
   function applyPreset(keys: string[]) {
-    updateProfile({ packages: { ...profile.packages, enabled: [...new Set([...keys])] } })
+    updateProfile({ packages: { ...profile.packages, enabled: [...new Set(keys)] } })
+  }
+
+  function applyFullPreset() {
+    const keys = defaultsData?.keys ?? []
+    applyPreset(keys)
   }
 
   function addCustom() {
@@ -188,23 +167,36 @@ export function Step03Packages() {
         <div style={{ padding: '16px 12px 8px', fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Presets
         </div>
-        {Object.entries(PRESETS).map(([name, keys]) => (
-          <button
-            key={name}
-            onClick={() => applyPreset(keys)}
-            style={{
-              padding: '7px 12px',
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--info)',
-              textAlign: 'left',
-              fontSize: 12,
-              borderLeft: '2px solid transparent',
-            }}
-          >
-            {name}
-          </button>
-        ))}
+        <button
+          onClick={() => applyPreset(MINIMAL_PRESET)}
+          style={{ padding: '7px 12px', background: 'transparent', border: 'none', color: 'var(--info)', textAlign: 'left', fontSize: 12, borderLeft: '2px solid transparent' }}
+        >
+          Minimal
+        </button>
+        <button
+          onClick={applyFullPreset}
+          style={{ padding: '7px 12px', background: 'transparent', border: 'none', color: 'var(--info)', textAlign: 'left', fontSize: 12, borderLeft: '2px solid transparent' }}
+          title={`Выбирает все пакеты по умолчанию (${defaultsData?.keys.length ?? '…'})`}
+        >
+          Full netOS {defaultsData ? `(${defaultsData.keys.length})` : ''}
+        </button>
+
+        {/* Nervum / SDN info */}
+        <div
+          style={{
+            margin: '16px 8px 0',
+            padding: '10px',
+            background: 'var(--info)0e',
+            border: '1px solid var(--info)33',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 11,
+            color: 'var(--fg-3)',
+            lineHeight: 1.5,
+          }}
+        >
+          <div style={{ fontWeight: 700, color: 'var(--info)', marginBottom: 4 }}>SDN / Nervum</div>
+          Nervum — не BR2_PACKAGE. Устанавливается отдельно через pip в /opt/testum/.python. Настраивается на шаге&nbsp;4.
+        </div>
       </div>
 
       {/* Main package list */}
