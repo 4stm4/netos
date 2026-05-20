@@ -68,6 +68,18 @@ export function usePackages() {
   })
 }
 
+export interface DefaultsResult {
+  keys: string[]
+}
+
+export function useDefaults() {
+  return useQuery({
+    queryKey: ['defaults'],
+    queryFn: () => fetchJSON<DefaultsResult>(`${BASE}/defaults`),
+    staleTime: Infinity,
+  })
+}
+
 // ── Profiles ─────────────────────────────────────────────────────────────────
 
 export interface ProfileSummary {
