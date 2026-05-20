@@ -8,7 +8,8 @@ from typing import Iterable, Optional, Union
 
 
 RPI_REPO_URL = "https://github.com/raspberrypi/linux.git"
-DEFAULT_RPI_BRANCH = "rpi-6.6.y"
+DEFAULT_RPI_BRANCH = "rpi-6.12.y"
+MAINLINE_KERNEL_BASE_URL = "https://cdn.kernel.org/pub/linux/kernel"
 
 
 def _env(name: str, default: Optional[str] = None, legacy_name: Optional[str] = None) -> Optional[str]:
@@ -24,6 +25,9 @@ RPI_FIRMWARE_BASE_URL = _env(
     "https://raw.githubusercontent.com/raspberrypi/firmware/master/boot",
     legacy_name="LITAINER_RPI_FIRMWARE_BASE_URL",
 )
+
+MAINLINE_KERNEL_VERSION = _env("NETOS_MAINLINE_KERNEL_VERSION", "6.12.27")
+
 
 class LinuxKernel:
     rpi_model: str
@@ -42,10 +46,13 @@ class LinuxKernel:
         config_options: Iterable[str] = (),
         boot_firmware_files: Iterable[str] = (),
         build_modules: bool = True,
+        kernel_source: str = "rpi",
     ):
         self.temp_path = Path(temp_path)
         self.rpi_model = rpi_model
-        self.rpi_repo_path = self.temp_path / "rpi_linux"
+        self.kernel_source = kernel_source
+        subdir = "mainline_linux" if kernel_source == "mainline" else "rpi_linux"
+        self.rpi_repo_path = self.temp_path / subdir
         self.kernel_image = self.rpi_repo_path / "arch/arm64/boot/Image"
         self.kernel_filename = kernel_filename
         self.rootfs_path = Path(rootfs_path)
@@ -74,16 +81,64 @@ class LinuxKernel:
                 return False
         return True
 
+    def _download_mainline_kernel(self):
+        """Скачивает и распаковывает mainline-ядро с kernel.org."""
+        version = MAINLINE_KERNEL_VERSION
+        major = version.split(".")[0]
+        filename = f"linux-{version}.tar.xz"
+        url = f"{MAINLINE_KERNEL_BASE_URL}/v{major}.x/{filename}"
+        archive = self.temp_path / filename
+        extract_tmp = self.temp_path / "mainline_linux.extract"
+
+        if self.rpi_repo_path.exists() and (self.rpi_repo_path / "Makefile").exists():
+            current = (self.rpi_repo_path / "include/config/kernel.release").read_text().strip() \
+                if (self.rpi_repo_path / "include/config/kernel.release").exists() else ""
+            if version in current:
+                logging.info("Mainline kernel %s уже распакован: %s", version, self.rpi_repo_path)
+                return
+            logging.info("Версия mainline изменилась (%s → %s), перескачиваем...", current, version)
+            shutil.rmtree(self.rpi_repo_path)
+
+        if extract_tmp.exists():
+            shutil.rmtree(extract_tmp)
+        extract_tmp.mkdir(parents=True)
+
+        if not archive.exists():
+            logging.info("Скачиваем mainline kernel %s: %s", version, url)
+            try:
+                subprocess.run(
+                    ["wget", "-O", str(archive), "--tries=3", "--timeout=60", url],
+                    check=True,
+                )
+            except subprocess.CalledProcessError:
+                if archive.exists():
+                    archive.unlink()
+                raise
+
+        logging.info("Распаковываем %s...", archive)
+        subprocess.run(
+            ["tar", "-xf", str(archive), "-C", str(extract_tmp), "--strip-components=1"],
+            check=True,
+        )
+        extract_tmp.rename(self.rpi_repo_path)
+        logging.info("Mainline kernel %s готов: %s", version, self.rpi_repo_path)
+
     def download_kernel(self):
-        """Загружает или обновляет исходники ядра Raspberry Pi."""
+        """Загружает или обновляет исходники ядра."""
         if self.prebuilt_kernel_image:
             if not self.prebuilt_kernel_image.exists():
                 raise FileNotFoundError(f"Prebuilt kernel Image не найден: {self.prebuilt_kernel_image}")
             logging.info(f"Используем prebuilt kernel Image: {self.prebuilt_kernel_image}")
             return
 
-        logging.info("Готовим исходники ядра Raspberry Pi...")
         self.temp_path.mkdir(parents=True, exist_ok=True)
+
+        if self.kernel_source == "mainline":
+            self._download_mainline_kernel()
+            return
+
+        logging.info("Готовим исходники ядра Raspberry Pi...")
+
 
         git_dir = self.rpi_repo_path / ".git"
         if self.rpi_repo_path.exists() and not git_dir.exists():
@@ -212,30 +267,29 @@ class LinuxKernel:
         )
 
     def configure_kernel(self):
-        """
-        Настраиваем ядро для ARM64 с использованием либо стандартной конфигурации,
-        либо конфигурации Raspberry Pi.
-        """
+        """Настраиваем ядро для ARM64."""
         if self.prebuilt_kernel_image:
             logging.info("Prebuilt kernel Image задан, конфигурацию ядра пропускаем.")
             return
 
-        logging.info("Настраиваем параметры ядра для ARM64...")
+        logging.info("Настраиваем параметры ядра для ARM64 (source=%s)...", self.kernel_source)
 
-        try:
-            self._use_rpi_config()
-        except FileNotFoundError as e:
-            logging.error(f"Ошибка: {e}. Переходим к стандартной конфигурации.")
+        if self.kernel_source == "mainline":
             subprocess.run(
-                [
-                    "make",
-                    "ARCH=arm64",
-                    "CROSS_COMPILE=aarch64-linux-gnu-",
-                    "defconfig",
-                ],
+                ["make", "ARCH=arm64", "CROSS_COMPILE=aarch64-linux-gnu-", "defconfig"],
                 check=True,
                 cwd=self.rpi_repo_path,
             )
+        else:
+            try:
+                self._use_rpi_config()
+            except FileNotFoundError as e:
+                logging.error(f"Ошибка: {e}. Переходим к стандартной конфигурации.")
+                subprocess.run(
+                    ["make", "ARCH=arm64", "CROSS_COMPILE=aarch64-linux-gnu-", "defconfig"],
+                    check=True,
+                    cwd=self.rpi_repo_path,
+                )
 
         # Применяем дополнительные изменения
         config_path = self.rpi_repo_path / ".config"
