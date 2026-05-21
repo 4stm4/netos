@@ -324,6 +324,7 @@ fi
             [
                 br2_arch,
                 "BR2_TOOLCHAIN_BUILDROOT_GLIBC=y",
+                "BR2_TOOLCHAIN_BUILDROOT_CXX=y",
                 f'BR2_TARGET_GENERIC_HOSTNAME="{NETOS_HOSTNAME}"',
                 f'BR2_TARGET_GENERIC_ISSUE="{NETOS_NAME} {NETOS_VERSION}"',
                 'BR2_SYSTEM_DHCP="eth0"',
