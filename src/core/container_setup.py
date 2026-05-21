@@ -384,6 +384,7 @@ exit 0
                     f"TESTUM_APP_MODULE={sh_quote(app_module)}",
                     f"TESTUM_PYTHONPATH={sh_quote(pythonpath)}",
                     f"TESTUM_HEALTH_PATH={sh_quote(health_path)}",
+                    f"NERVUM_URL={sh_quote(os.environ.get('NETOS_NERVUM_URL', 'http://localhost:8090'))}",
                     "",
                 ]
             )
@@ -911,8 +912,9 @@ esac
         data_dir = os.environ.get("NETOS_WEBUI_DATA_DIR", "/opt/testum")
         vendor_packages = os.environ.get(
             "NETOS_NERVUM_VENDOR_PACKAGES",
-            "pydantic-settings structlog prometheus-client",
+            "pydantic-settings structlog prometheus-client opentelemetry-api opentelemetry-sdk aiosqlite",
         )
+        sdn_port = os.environ.get("NETOS_NERVUM_SDN_PORT", "8090")
 
         vendor_dir = rootfs_path / data_dir.lstrip("/") / ".python"
         vendor_dir.mkdir(parents=True, exist_ok=True)
@@ -946,6 +948,59 @@ esac
             )
         self._cleanup_vendor_tree(vendor_dir)
         self.logger.info(f"nervum и зависимости vendored в {vendor_dir}")
+
+        # Создаём init-скрипт S97nervum для запуска sdn-controller при загрузке
+        init_dir = rootfs_path / "etc" / "init.d"
+        init_dir.mkdir(parents=True, exist_ok=True)
+        nervum_init = init_dir / "S97nervum"
+        nervum_init.write_text(self._nervum_init_script(data_dir, sdn_port))
+        nervum_init.chmod(0o755)
+        self.logger.info(f"Установлен init-скрипт nervum sdn-controller (port {sdn_port})")
+
+    def _nervum_init_script(self, data_dir: str, port: str) -> str:
+        return f"""\
+#!/bin/sh
+
+VENDOR_DIR={data_dir}/.python
+SDN_BIN=$VENDOR_DIR/bin/sdn-controller
+PIDFILE=/run/nervum-sdn.pid
+LOGFILE=/var/log/nervum/sdn-controller.log
+
+is_enabled() {{
+    [ -x "$SDN_BIN" ] || return 1
+    return 0
+}}
+
+start() {{
+    is_enabled || return 0
+    mkdir -p /run/nervum /var/log/nervum /var/lib/nervum
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "nervum sdn-controller already running"
+        return 0
+    fi
+    export PYTHONPATH="$VENDOR_DIR${{PYTHONPATH:+:$PYTHONPATH}}"
+    export SDN_HTTP_HOST=127.0.0.1
+    export SDN_HTTP_PORT={port}
+    export SDN_DATABASE_URL=sqlite+aiosqlite:////var/lib/nervum/nervum.db
+    "$SDN_BIN" >> "$LOGFILE" 2>&1 &
+    echo $! > "$PIDFILE"
+    echo "NERVUM_SDN_STARTED"
+}}
+
+stop() {{
+    if [ -f "$PIDFILE" ]; then
+        kill "$(cat "$PIDFILE")" 2>/dev/null || true
+        rm -f "$PIDFILE"
+    fi
+}}
+
+case "${{1:-start}}" in
+    start) start ;;
+    stop)  stop  ;;
+    restart) stop; start ;;
+    *) echo "Usage: $0 {{start|stop|restart}}"; exit 1 ;;
+esac
+"""
 
     def _pip_install_local(self, source_path: Path, vendor_dir: Path):
         subprocess.run(

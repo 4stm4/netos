@@ -14,7 +14,6 @@ from targets import TARGETS, TargetConfig, get_target
 
 
 PROJECT_ROOT = Path(__file__).parent.parent
-KERNEL_IMAGE = PROJECT_ROOT / "temp" / "rpi_linux" / "arch" / "arm64" / "boot" / "Image"
 DEFAULT_READY_MARKERS = {"OVSDB_STARTED", "OVS_VSWITCHD_STARTED", "NET_AGENT_STARTED", "TESTUM_WEBUI_STARTED"}
 DEFAULT_WEBUI_HEALTH_PATH = "/health"
 
@@ -23,13 +22,29 @@ def run_checked(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, check=False)
 
 
+def get_kernel_image(target: TargetConfig) -> Path:
+    """Return path to kernel image based on target's kernel_source and kernel_arch."""
+    src_dir = "rpi_linux" if target.kernel_source == "rpi" else "mainline_linux"
+    return PROJECT_ROOT / "temp" / src_dir / "arch" / target.kernel_arch / "boot" / target.kernel_filename
+
+
+def get_qemu_bin(target: TargetConfig) -> str:
+    """Return default QEMU binary name for the target architecture."""
+    arch_to_bin = {
+        "arm64": "qemu-system-aarch64",
+        "x86": "qemu-system-x86_64",
+    }
+    return arch_to_bin.get(target.kernel_arch, "qemu-system-aarch64")
+
+
 def require_artifacts(target: TargetConfig):
     image_path = PROJECT_ROOT / target.image_name
+    kernel_image = get_kernel_image(target)
     missing = []
     if not image_path.exists():
         missing.append(str(image_path))
-    if not KERNEL_IMAGE.exists():
-        missing.append(str(KERNEL_IMAGE))
+    if not kernel_image.exists():
+        missing.append(str(kernel_image))
     if missing:
         raise FileNotFoundError(
             "Не найдены артефакты для запуска QEMU:\n"
@@ -72,7 +87,7 @@ def build_qemu_cmd(
         "-M", target.qemu_machine,
         "-cpu", target.qemu_cpu or "max",
         "-m", "1024",
-        "-kernel", str(KERNEL_IMAGE),
+        "-kernel", str(get_kernel_image(target)),
         "-drive", f"file={image_path},format=raw,if=virtio",
         "-append", target.boot_cmdline,
         "-netdev", "user,id=net0," + ",".join(hostfwds),
@@ -170,14 +185,15 @@ def build_parser():
     parser.add_argument("--webui-health-path", default=os.environ.get("NETOS_WEBUI_HEALTH_PATH", DEFAULT_WEBUI_HEALTH_PATH))
     parser.add_argument("--check-webui", action="store_true")
     parser.add_argument("--skip-tcp-check", action="store_true")
-    parser.add_argument("--qemu-bin", default=os.environ.get("QEMU_BIN", "qemu-system-aarch64"))
+    parser.add_argument("--qemu-bin", default=os.environ.get("QEMU_BIN", ""))
     return parser
 
 
 def main():
     args = build_parser().parse_args()
     target = get_target(args.target)
-    qemu_bin = shutil.which(args.qemu_bin) or args.qemu_bin
+    qemu_bin_name = args.qemu_bin or get_qemu_bin(target)
+    qemu_bin = shutil.which(qemu_bin_name) or qemu_bin_name
 
     if not target.qemu_supported:
         raise RuntimeError(
