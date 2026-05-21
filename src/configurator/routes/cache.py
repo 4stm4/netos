@@ -124,13 +124,20 @@ def get_cache_status(target: str) -> dict[str, Any]:
     )
 
     # Stale detection
+    # Смотрим наличие stamp-директорий toolchain: если их нет — toolchain не собирался,
+    # это нормальное состояние. Чистка нужна только когда stamps есть, но g++ отсутствует.
+    _TC_STAMP_DIRS = ["toolchain-buildroot", "toolchain-buildroot-aux", "toolchain-buildroot-initial"]
+    tc_stamps_exist = out_exists and any(
+        (out_dir / "build" / d).exists() for d in _TC_STAMP_DIRS
+    )
     current_hash = _compute_defconfig_hash(target)
     saved_hash   = _saved_hash(out_dir)
     config_stale = bool(saved_hash and current_hash and current_hash != saved_hash)
+    needs_tc_clean = config_stale or (tc_stamps_exist and not cxx_ok)
     stale_reason = ""
     if config_stale:
         stale_reason = "Toolchain-конфиг изменился с последней сборки"
-    elif out_exists and not cxx_ok:
+    elif tc_stamps_exist and not cxx_ok:
         stale_reason = "g++ не найден — toolchain собран без BR2_TOOLCHAIN_BUILDROOT_CXX"
 
     # Image
@@ -161,7 +168,7 @@ def get_cache_status(target: str) -> dict[str, Any]:
             "size_mb":  img_size_mb,
             "mtime":    img_mtime,
         },
-        "config_stale": config_stale or (out_exists and not cxx_ok),
+        "config_stale": needs_tc_clean,
         "stale_reason": stale_reason,
     }
 
