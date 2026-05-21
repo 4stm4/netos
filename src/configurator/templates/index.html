@@ -16,10 +16,10 @@
     <div class="sidebar-brand">netOS</div>
 
     <nav class="steps-nav">
-      <template x-for="(label, i) in ['Target', 'Branding & Network', 'Packages', 'Web UI & Nervum', 'Build']" :key="i">
+      <template x-for="(label, i) in ['Среда', 'Target', 'Branding & Network', 'Packages', 'Web UI & Nervum', 'Build']" :key="i">
         <button class="step-btn"
           :class="{ active: step === i+1, done: step > i+1 }"
-          @click="step = i+1">
+          @click="step = i+1; if(i===0) refreshCache()">
           <span class="step-num" x-text="i+1"></span>
           <span x-text="label"></span>
         </button>
@@ -44,11 +44,122 @@
   <!-- ── Content ───────────────────────────────────────────────── -->
   <div class="content">
     <div class="step-header">
-      <h1 x-text="['Target', 'Branding & Network', 'Packages', 'Web UI & Nervum', 'Build'][step-1]"></h1>
+      <h1 x-text="['Среда', 'Target', 'Branding & Network', 'Packages', 'Web UI & Nervum', 'Build'][step-1]"></h1>
     </div>
 
-    <!-- ── Step 1: Target ──────────────────────────────────────── -->
-    <div class="step-body two-col" x-show="step === 1">
+    <!-- ── Step 1: Среда (Preflight) ──────────────────────────── -->
+    <div class="step-body step-sections" x-show="step === 1">
+      <section>
+        <div class="section-label">Состояние кэша сборки —
+          <span x-text="profile.target" style="font-weight:600"></span>
+          <button class="btn-sm" style="margin-left:8px" @click="refreshCache()" :disabled="cacheLoading">↻ Обновить</button>
+        </div>
+
+        <!-- Loading -->
+        <div x-show="cacheLoading" style="color:var(--muted);margin-top:12px">Загрузка…</div>
+
+        <template x-if="cache && !cacheLoading">
+          <div>
+            <!-- Диск -->
+            <div class="env-row">
+              <span class="env-label">💾 Диск</span>
+              <span class="env-val">
+                <span x-text="cache.disk.path"></span>
+                — <strong x-text="cache.disk.free_gb + ' GB'"></strong> свободно
+                из <span x-text="cache.disk.total_gb + ' GB'"></span>
+                <span class="env-bar-wrap"><span class="env-bar" :style="`width:${Math.round(cache.disk.used_gb/cache.disk.total_gb*100)}%`"></span></span>
+              </span>
+            </div>
+
+            <!-- Output dir -->
+            <div class="env-row">
+              <span class="env-label">📁 Buildroot output</span>
+              <span class="env-val">
+                <template x-if="cache.output.exists">
+                  <span class="tag-ok">✓ есть</span>
+                </template>
+                <template x-if="!cache.output.exists">
+                  <span class="tag-na">— нет</span>
+                </template>
+                <span x-show="cache.output.mtime" class="env-mtime" x-text="fmtDate(cache.output.mtime)"></span>
+              </span>
+            </div>
+
+            <!-- Toolchain -->
+            <div class="env-row">
+              <span class="env-label">🔧 Toolchain (gcc)</span>
+              <span class="env-val">
+                <template x-if="cache.toolchain.ok">
+                  <span class="tag-ok">✓ собран</span>
+                </template>
+                <template x-if="!cache.toolchain.ok">
+                  <span class="tag-warn">— не собран</span>
+                </template>
+                <span x-show="cache.toolchain.mtime" class="env-mtime" x-text="fmtDate(cache.toolchain.mtime)"></span>
+              </span>
+            </div>
+
+            <!-- g++ / CXX -->
+            <div class="env-row">
+              <span class="env-label">🔧 Toolchain (g++)</span>
+              <span class="env-val">
+                <template x-if="cache.toolchain.cxx_ok">
+                  <span class="tag-ok">✓ есть</span>
+                </template>
+                <template x-if="!cache.toolchain.cxx_ok && cache.output.exists">
+                  <span class="tag-err">✗ нет — нужна чистка toolchain</span>
+                </template>
+                <template x-if="!cache.toolchain.cxx_ok && !cache.output.exists">
+                  <span class="tag-na">— нет</span>
+                </template>
+              </span>
+            </div>
+
+            <!-- Image -->
+            <div class="env-row">
+              <span class="env-label">🖼 Образ</span>
+              <span class="env-val">
+                <template x-if="cache.image.exists">
+                  <span class="tag-ok">✓ готов</span>
+                </template>
+                <template x-if="!cache.image.exists">
+                  <span class="tag-na">— нет</span>
+                </template>
+                <span x-show="cache.image.exists" x-text="' ' + cache.image.size_mb + ' MB'"></span>
+                <span x-show="cache.image.mtime" class="env-mtime" x-text="fmtDate(cache.image.mtime)"></span>
+              </span>
+            </div>
+
+            <!-- Stale warning -->
+            <div x-show="cache.config_stale" class="env-stale">
+              ⚠️ <span x-text="cache.stale_reason"></span>
+            </div>
+
+            <!-- Кнопки очистки -->
+            <div class="btn-row" style="margin-top:16px;flex-wrap:wrap;gap:8px">
+              <button class="btn-secondary" @click="cleanCache('toolchain')"
+                :disabled="cacheClearing || !cache.output.exists">
+                <span x-show="!cacheClearing">🔧 Очистить toolchain</span>
+                <span x-show="cacheClearing">…</span>
+              </button>
+              <button class="btn-secondary" @click="cleanCache('image')"
+                :disabled="cacheClearing || !cache.image.exists">
+                🖼 Удалить образ
+              </button>
+              <button class="btn-danger" @click="cleanCache('full')"
+                :disabled="cacheClearing || !cache.output.exists"
+                title="Удалит весь Buildroot output (~1-2 ч на пересборку)">
+                🗑 Полная чистка
+              </button>
+            </div>
+            <div x-show="cacheMsg" class="env-msg" x-text="cacheMsg"></div>
+          </div>
+        </template>
+      </section>
+    </div>
+
+    <!-- ── Step 2: Target ──────────────────────────────────────── -->
+    <div class="step-body two-col" x-show="step === 2">
       <div class="col-main">
         <div>
           <div class="section-label" style="margin-bottom:12px">Выберите Target</div>
@@ -118,8 +229,8 @@
       </div>
     </div>
 
-    <!-- ── Step 2: Branding & Network ──────────────────────────── -->
-    <div class="step-body step-sections" x-show="step === 2">
+    <!-- ── Step 3: Branding & Network ──────────────────────────── -->
+    <div class="step-body step-sections" x-show="step === 3">
       <div class="card">
         <div class="card-title">Branding</div>
         <div class="form-grid">
@@ -201,8 +312,8 @@
       </div>
     </div>
 
-    <!-- ── Step 3: Packages ─────────────────────────────────────── -->
-    <div class="step-body pkg-layout" x-show="step === 3">
+    <!-- ── Step 4: Packages ─────────────────────────────────────── -->
+    <div class="step-body pkg-layout" x-show="step === 4">
       <!-- Category sidebar -->
       <div class="pkg-sidebar">
         <div class="section-label" style="padding: 0 12px">Категории</div>
@@ -273,8 +384,8 @@
       </div>
     </div>
 
-    <!-- ── Step 4: Web UI & Nervum ──────────────────────────────── -->
-    <div class="step-body step-sections" x-show="step === 4">
+    <!-- ── Step 5: Web UI & Nervum ──────────────────────────────── -->
+    <div class="step-body step-sections" x-show="step === 5">
       <div class="card">
         <div class="card-title">Testum Web UI</div>
         <div class="form-grid">
@@ -347,8 +458,8 @@
       </div>
     </div>
 
-    <!-- ── Step 5: Build ────────────────────────────────────────── -->
-    <div class="step-body build-layout" x-show="step === 5">
+    <!-- ── Step 6: Build ────────────────────────────────────────── -->
+    <div class="step-body build-layout" x-show="step === 6">
       <div class="build-controls">
         <div class="field">
           <label>Имя профиля</label>
@@ -377,7 +488,7 @@
     <!-- Footer nav -->
     <div class="step-footer">
       <button class="btn-secondary" @click="step--" x-show="step > 1">← Назад</button>
-      <button class="btn-primary" @click="step++" x-show="step < 5">Далее →</button>
+      <button class="btn-primary" @click="step++" x-show="step < 6">Далее →</button>
     </div>
   </div>
 </div>
@@ -437,6 +548,10 @@ function app() {
     buildLog: [],
     building: false,
     buildStage: '',
+    cache: null,
+    cacheLoading: false,
+    cacheClearing: false,
+    cacheMsg: '',
 
     async init() {
       const [t, p, d, pr] = await Promise.all([
@@ -449,6 +564,7 @@ function app() {
       this.catalogue = p
       this.defaultKeys = d.keys
       this.profiles  = pr
+      this.refreshCache()
     },
 
     // ── computed ───────────────────────────────────────────────
@@ -488,6 +604,7 @@ function app() {
       this.selectedPreset = p.id
       this.profile.image.size_mb = p.size_mb
       this.profile.image.boot_mb = p.boot_mb
+      this.refreshCache()
     },
 
     applyPreset(p) {
@@ -599,11 +716,49 @@ function app() {
         es.close()
         this.building = false
         this.buildStage = 'Готово ✓'
+        fetch(`/api/cache/${this.profile.target}/save-hash`, { method: 'POST' })
+        this.refreshCache()
       })
       es.onerror = () => {
         es.close()
         this.building = false
       }
+    },
+
+    async refreshCache() {
+      this.cacheLoading = true
+      this.cacheMsg = ''
+      try {
+        this.cache = await fetch(`/api/cache/${this.profile.target}`).then(r => r.json())
+      } finally {
+        this.cacheLoading = false
+      }
+    },
+
+    async cleanCache(mode) {
+      const labels = { toolchain:'Очистка toolchain…', full:'Полная чистка…', image:'Удаление образа…' }
+      if (mode === 'full' && !confirm('Удалить весь Buildroot output? Потребуется полная пересборка (~1-2 ч).')) return
+      this.cacheClearing = true
+      this.cacheMsg = labels[mode] || '…'
+      try {
+        const r = await fetch(`/api/cache/${this.profile.target}/clean`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode }),
+        }).then(r => r.json())
+        this.cacheMsg = r.freed_gb > 0
+          ? `✓ Готово. Освобождено: ${r.freed_gb} GB`
+          : '✓ Готово'
+        await this.refreshCache()
+      } finally {
+        this.cacheClearing = false
+      }
+    },
+
+    fmtDate(iso) {
+      if (!iso) return ''
+      const d = new Date(iso)
+      return d.toLocaleDateString('ru-RU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
     },
   }
 }
