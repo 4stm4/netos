@@ -62,7 +62,7 @@
           <div>
             <!-- Диск -->
             <div class="env-row">
-              <span class="env-label">💾 Диск</span>
+              <span class="env-label">Диск</span>
               <span class="env-val">
                 <span x-text="cache.disk.path"></span>
                 — <strong x-text="cache.disk.free_gb + ' GB'"></strong> свободно
@@ -73,7 +73,7 @@
 
             <!-- Output dir -->
             <div class="env-row">
-              <span class="env-label">📁 Buildroot output</span>
+              <span class="env-label">Buildroot output</span>
               <span class="env-val">
                 <template x-if="cache.output.exists">
                   <span class="tag-ok">✓ есть</span>
@@ -87,7 +87,7 @@
 
             <!-- Toolchain -->
             <div class="env-row">
-              <span class="env-label">🔧 Toolchain (gcc)</span>
+              <span class="env-label">Toolchain (gcc)</span>
               <span class="env-val">
                 <template x-if="cache.toolchain.ok">
                   <span class="tag-ok">✓ собран</span>
@@ -101,7 +101,7 @@
 
             <!-- g++ / CXX -->
             <div class="env-row">
-              <span class="env-label">🔧 Toolchain (g++)</span>
+              <span class="env-label">Toolchain (g++)</span>
               <span class="env-val">
                 <template x-if="cache.toolchain.cxx_ok">
                   <span class="tag-ok">✓ есть</span>
@@ -117,7 +117,7 @@
 
             <!-- Image -->
             <div class="env-row">
-              <span class="env-label">🖼 Образ</span>
+              <span class="env-label">Образ</span>
               <span class="env-val">
                 <template x-if="cache.image.exists">
                   <span class="tag-ok">✓ готов</span>
@@ -139,17 +139,17 @@
             <div class="btn-row" style="margin-top:16px;flex-wrap:wrap;gap:8px">
               <button class="btn-secondary" @click="cleanCache('toolchain')"
                 :disabled="cacheClearing || !cache.output.exists">
-                <span x-show="!cacheClearing">🔧 Очистить toolchain</span>
+                <span x-show="!cacheClearing">Очистить toolchain</span>
                 <span x-show="cacheClearing">…</span>
               </button>
               <button class="btn-secondary" @click="cleanCache('image')"
                 :disabled="cacheClearing || !cache.image.exists">
-                🖼 Удалить образ
+                Удалить образ
               </button>
               <button class="btn-danger" @click="cleanCache('full')"
                 :disabled="cacheClearing || !cache.output.exists"
                 title="Удалит весь Buildroot output (~1-2 ч на пересборку)">
-                🗑 Полная чистка
+                Полная чистка
               </button>
             </div>
             <div x-show="cacheMsg" class="env-msg" x-text="cacheMsg"></div>
