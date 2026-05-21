@@ -492,6 +492,62 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
 /* Sections within steps */
 .step-sections { display: flex; flex-direction: column; gap: 20px; }
 
+/* ── Step 0: Среда / Cache ──────────────────────────────── */
+.env-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.env-row:last-of-type { border-bottom: none; }
+.env-label {
+  width: 160px;
+  flex-shrink: 0;
+  color: var(--fg-2);
+  font-size: 13px;
+}
+.env-val { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.env-mtime { color: var(--fg-3); font-size: 12px; }
+
+.tag-ok   { color: var(--ok);   font-weight: 600; font-size: 13px; }
+.tag-warn { color: var(--warn); font-weight: 600; font-size: 13px; }
+.tag-err  { color: var(--err);  font-weight: 600; font-size: 13px; }
+.tag-na   { color: var(--fg-3); font-size: 13px; }
+
+.env-bar-wrap {
+  display: inline-block;
+  width: 80px;
+  height: 6px;
+  background: var(--bg-2);
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.env-bar {
+  display: block;
+  height: 100%;
+  background: var(--info);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.env-stale {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  border-radius: var(--radius);
+  color: var(--warn);
+  font-size: 13px;
+}
+.env-msg {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--ok);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
