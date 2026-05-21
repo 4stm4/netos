@@ -191,11 +191,10 @@ def clean_cache(target: str, req: CleanRequest) -> dict[str, Any]:
     if req.mode == "toolchain":
         if out_dir.exists():
             prefix  = _toolchain_cross_prefix(target)
-            # Удаляем стампы toolchain
+            # Удаляем стампы toolchain (размер не считаем — du слишком долго)
             for d in ["toolchain-buildroot", "toolchain-buildroot-aux", "toolchain-buildroot-initial"]:
                 stamp_dir = out_dir / "build" / d
                 if stamp_dir.exists():
-                    freed_gb += _dir_size_gb(stamp_dir)
                     shutil.rmtree(stamp_dir)
             # Удаляем g++ и c++ из host/bin чтобы Buildroot понял что надо пересобрать
             for suffix in ["-g++", "-c++"]:
