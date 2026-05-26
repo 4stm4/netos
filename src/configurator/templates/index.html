@@ -436,6 +436,11 @@
         <div class="pkg-toolbar">
           <input class="search-input" x-model="pkgSearch" placeholder="Поиск пакетов…">
           <button class="btn-outline" @click="showModal = true">+ Custom BR2_PACKAGE</button>
+          <button class="btn-outline" @click="previewDefconfig()" :disabled="defconfigLoading"
+            title="Показать итоговый defconfig (сохраняет профиль автоматически)">
+            <span x-show="!defconfigLoading">👁 Defconfig</span>
+            <span x-show="defconfigLoading">…</span>
+          </button>
         </div>
         <div class="pkg-list">
           <template x-for="cat in filteredCats" :key="cat.id">
@@ -465,9 +470,29 @@
       <!-- Summary -->
       <div class="pkg-summary">
         <div class="section-label">Summary</div>
-        <div class="summary-row"><span>Выбрано</span><span class="mono" x-text="enabled.size"></span></div>
+        <div class="summary-row">
+          <span>Выбрано</span>
+          <span class="mono" x-text="enabled.size"></span>
+        </div>
+        <div class="summary-row">
+          <span>+ к дефолту</span>
+          <span class="mono"
+            :style="extraEnabled.size > 0 ? 'color:var(--accent)' : ''"
+            x-text="extraEnabled.size > 0 ? '+' + extraEnabled.size : '—'">
+          </span>
+        </div>
         <div class="summary-row"><span>Est. size</span><span class="mono" x-text="fmtKb(totalKb)"></span></div>
         <div class="summary-row"><span>Custom</span><span class="mono" x-text="profile.packages.custom.length"></span></div>
+
+        <div x-show="extraEnabled.size > 0" style="margin-top:12px">
+          <div class="section-label" style="margin-bottom:6px">Дополнительно включено</div>
+          <template x-for="key in [...extraEnabled]" :key="key">
+            <div class="custom-line">
+              <span class="mono" x-text="key + '=y'"></span>
+              <button class="btn-remove" @click="toggleByKey(key)">×</button>
+            </div>
+          </template>
+        </div>
 
         <div x-show="profile.packages.custom.length > 0" style="margin-top:12px">
           <div class="section-label" style="margin-bottom:6px">Custom lines</div>
@@ -590,6 +615,24 @@
   </div>
 </div>
 
+<!-- ── Defconfig preview modal ───────────────────────────────── -->
+<div class="modal-overlay" x-show="showDefconfig" x-cloak @click.self="showDefconfig = false">
+  <div class="modal" style="width:720px;max-width:95vw" @click.stop>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h3 style="margin:0">Итоговый defconfig</h3>
+      <button class="btn-secondary" @click="showDefconfig = false">✕ Закрыть</button>
+    </div>
+    <div x-show="defconfigLoading" style="color:var(--muted);padding:20px 0">Генерация…</div>
+    <pre x-show="!defconfigLoading" x-text="defconfigText"
+      style="background:var(--bg-code,#1e1e2e);color:var(--fg-code,#cdd6f4);padding:14px;border-radius:6px;
+             overflow:auto;max-height:60vh;font-size:12px;line-height:1.5;margin:0;white-space:pre-wrap"></pre>
+    <div style="margin-top:10px;font-size:12px;color:var(--muted)">
+      Это финальный defconfig, который будет передан в Buildroot.
+      Пакеты из DEFAULT_GROUPS (catalog.yaml) + ваши чекбоксы + custom строки.
+    </div>
+  </div>
+</div>
+
 <!-- ── Custom package modal ──────────────────────────────────── -->
 <div class="modal-overlay" x-show="showModal" x-cloak @click.self="showModal = false">
   <div class="modal" @click.stop>
@@ -654,6 +697,9 @@ function app() {
     artifactMsg: '',
     evictForm: { dir:'all', max_entries:'', max_age_days:'', max_size_mb:'', dry_run:false },
     evicting: false,
+    showDefconfig: false,
+    defconfigText: '',
+    defconfigLoading: false,
 
     async init() {
       const [t, p, d, pr] = await Promise.all([
@@ -674,6 +720,12 @@ function app() {
     get rootfsMb() { return this.profile.image.size_mb - this.profile.image.boot_mb },
 
     get enabled() { return new Set(this.profile.packages.enabled) },
+
+    // Packages enabled by user that are NOT in the default set (defaultKeys)
+    get extraEnabled() {
+      const def = new Set(this.defaultKeys)
+      return new Set([...this.enabled].filter(k => !def.has(k)))
+    },
 
     get filteredCats() {
       const q = this.pkgSearch.toLowerCase()
@@ -752,6 +804,11 @@ function app() {
 
     removeCustom(line) {
       this.profile.packages.custom = this.profile.packages.custom.filter(l => l !== line)
+    },
+
+    toggleByKey(key) {
+      // Remove from enabled list (used from Summary panel's × button)
+      this.profile.packages.enabled = this.profile.packages.enabled.filter(k => k !== key)
     },
 
     fmtKb(kb) {
@@ -862,6 +919,23 @@ function app() {
       if (!iso) return ''
       const d = new Date(iso)
       return d.toLocaleDateString('ru-RU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+    },
+
+    async previewDefconfig() {
+      if (!this.profileName) {
+        alert('Сначала сохраните профиль (введите имя в боковой панели и нажмите «Сохранить»)')
+        return
+      }
+      await this.saveProfile()
+      this.defconfigLoading = true
+      this.showDefconfig = true
+      this.defconfigText = ''
+      try {
+        const r = await fetch(`/api/profiles/${this.profileName}/dry-run`, { method: 'POST' })
+        this.defconfigText = r.ok ? await r.text() : `Ошибка: ${await r.text()}`
+      } finally {
+        this.defconfigLoading = false
+      }
     },
 
     async refreshArtifactCache() {
