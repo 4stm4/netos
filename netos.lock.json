@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "generated_at": "2026-05-26T00:00:00+00:00",
+  "artifacts": {
+    "buildroot": {
+      "version": "2026.02.1",
+      "url": "https://buildroot.org/downloads/buildroot-2026.02.1.tar.xz",
+      "sha256": "a2216fdc46b5e81e529acb9077324f7b4a9403366922f350bf7be67f46231b66"
+    },
+    "openvswitch": {
+      "version": "3.4.1",
+      "url": "https://www.openvswitch.org/releases/openvswitch-3.4.1.tar.gz",
+      "sha256": "6e97ec7dfdda5b40b5103946d53e4f8b11edf66049fedbdcb323e1af67133de8"
+    },
+    "linux-mainline": {
+      "version": "6.12.27",
+      "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.27.tar.xz",
+      "sha256": ""
+    }
+  }
+}
