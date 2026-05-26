@@ -12,7 +12,7 @@ class BrandingConfig(BaseModel):
     hostname: str = "4stm4-netos"
     root_password: str = ""
     ssh_authorized_key: str = ""
-    console: Literal["ttyAMA0", "tty1", "both"] = "ttyAMA0"
+    console: Literal["ttyAMA0", "ttyS0", "tty1", "both"] = "ttyAMA0"
 
     @field_validator("id")
     @classmethod
@@ -51,8 +51,17 @@ class NetworkConfig(BaseModel):
 
 
 class PackagesConfig(BaseModel):
-    enabled: list[str] = []
-    custom: list[str] = []
+    enabled: list[str] = []   # BR2_PACKAGE_* keys (without =y) — from catalogue checkboxes
+    custom:  list[str] = []   # raw BR2_PACKAGE_*=y lines — from custom modal
+
+    def extra_packages(self) -> list[str]:
+        """Return deduplicated list of extra BR2_PACKAGE_*=y lines for the builder.
+
+        Converts enabled keys (``BR2_PACKAGE_FOO``) to ``BR2_PACKAGE_FOO=y``
+        and appends custom raw lines, preserving order and removing duplicates.
+        """
+        lines = [f"{k}=y" for k in self.enabled] + list(self.custom)
+        return list(dict.fromkeys(lines))
 
 
 class WebUIConfig(BaseModel):

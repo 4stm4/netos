@@ -125,7 +125,7 @@ def dry_run(name: str) -> str:
                 rootfs_path=tmp_path / "rootfs",
                 temp_path=tmp_path,
                 target=target,
-                extra_packages=profile.packages.custom,
+                extra_packages=profile.packages.extra_packages(),
             )
             # Only write the external tree (generates the defconfig file)
             builder._write_external_tree()

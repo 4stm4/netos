@@ -41,8 +41,8 @@ def get_build_info(build_id: str) -> dict[str, Any]:
 @router.post("/profiles/{name}/build")
 async def start_build_for_profile(name: str) -> dict[str, str]:
     profile = _load_profile(name)
-    env = profile_to_env(profile)
-    extra = list(profile.packages.custom) if profile.packages.custom else []
+    env   = profile_to_env(profile)
+    extra = profile.packages.extra_packages()   # enabled keys + custom raw lines
     build_id = start_build(
         target=profile.target,
         env_override=env,
@@ -58,8 +58,8 @@ async def start_build_inline(profile_data: dict[str, Any]) -> dict[str, str]:
         profile = Profile(**profile_data)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    env = profile_to_env(profile)
-    extra = list(profile.packages.custom) if profile.packages.custom else []
+    env   = profile_to_env(profile)
+    extra = profile.packages.extra_packages()   # enabled keys + custom raw lines
     build_id = start_build(
         target=profile.target,
         env_override=env,
