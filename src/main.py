@@ -219,7 +219,11 @@ if __name__ == "__main__":
     linux_kernel.configure_kernel()
     linux_kernel.compile_kernel()
 
-    NetOSBuildrootBuilder(ROOTFS_PATH, TEMP_PATH, target, extra_packages=extra_packages).bootstrap()
+    NetOSBuildrootBuilder(
+        ROOTFS_PATH, TEMP_PATH, target,
+        extra_packages=extra_packages,
+        cache_policy=plan.cache_policy,
+    ).bootstrap()
 
     # Настройка контейнера
     setup.setup_directories(ROOTFS_PATH)

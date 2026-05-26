@@ -52,11 +52,17 @@ class NetOSBuildrootBuilder:
         temp_path: Path,
         target: TargetConfig,
         extra_packages: "list[str] | tuple[str, ...] | None" = None,
+        cache_policy: str = "",
     ):
         self.rootfs_path = Path(rootfs_path)
         self.temp_path = Path(temp_path)
         self.target = target
         self.extra_packages: list[str] = list(extra_packages) if extra_packages else []
+        # cache_policy: explicit arg > env var > default "use"
+        self.cache_policy = (
+            cache_policy
+            or os.environ.get("NETOS_CACHE_POLICY", "use")
+        )
         self.buildroot_dir = self.temp_path / f"buildroot-{BUILDROOT_VERSION}"
         self.external_dir = self.temp_path / "netos-buildroot-external"
         self.output_dir = self.temp_path / f"buildroot-output-{target.name}"
@@ -68,8 +74,10 @@ class NetOSBuildrootBuilder:
         self._prepare_buildroot()
         self._write_external_tree()
         self._configure_buildroot()
+        self._restore_toolchain_cache()   # try cache hit before make
         self._build_rootfs()
         self._extract_rootfs()
+        self._pack_toolchain_cache()      # save new toolchain to cache
         # Save toolchain hash after a successful build so next run can detect config changes
         self._save_toolchain_hash()
 
@@ -415,6 +423,77 @@ fi
             path = self.output_dir / rel_path
             if path.exists() or path.is_symlink():
                 path.unlink()
+
+    # ------------------------------------------------------------------
+    # Toolchain cache (M3)
+    # ------------------------------------------------------------------
+
+    def _build_plan(self):
+        """Return a ResolvedBuildPlan for the current target (lazy import)."""
+        from netos_build.plan import ResolvedBuildPlan
+        return ResolvedBuildPlan.from_target(
+            self.target,
+            extra_packages=self.extra_packages,
+            cache_policy=self.cache_policy,
+        )
+
+    def _restore_toolchain_cache(self) -> None:
+        """Try to restore a pre-built toolchain from cache.
+
+        Called after defconfig and before ``make`` so Buildroot sees the
+        existing stamps and skips the ~45-min GCC build.
+        """
+        if self.cache_policy == "rebuild":
+            logging.info("cache_policy=rebuild — skipping toolchain cache restore")
+            return
+
+        from netos_build.toolchain_cache import ToolchainCache
+        plan     = self._build_plan()
+        tc_cache = ToolchainCache(self.temp_path / "cache")
+        key      = tc_cache.cache_key(plan, BUILDROOT_VERSION)
+
+        if tc_cache.has(plan, BUILDROOT_VERSION):
+            logging.info("Toolchain cache hit: %s", key)
+            if tc_cache.restore(plan, BUILDROOT_VERSION, self.output_dir):
+                return
+            # Restore failed (corrupt archive already deleted) — fall through to rebuild
+
+        logging.info("Toolchain cache miss: %s — full GCC build required (~45 min)", key)
+
+    def _pack_toolchain_cache(self) -> None:
+        """Pack the just-built toolchain into the cache for future use.
+
+        Non-fatal: if packing fails the build is still considered successful.
+        Skipped if the cache already has an entry for this key.
+        """
+        if self.cache_policy == "rebuild":
+            return
+
+        from netos_build.toolchain_cache import ToolchainCache
+        plan     = self._build_plan()
+        tc_cache = ToolchainCache(self.temp_path / "cache")
+
+        if tc_cache.has(plan, BUILDROOT_VERSION):
+            logging.info("Toolchain already cached — skipping pack")
+            return
+
+        # Verify that GCC was actually compiled into host/
+        prefix  = f"{self.target.buildroot_arch}-buildroot-linux-gnu"
+        gcc_bin = self.output_dir / "host" / "bin" / f"{prefix}-gcc"
+        if not gcc_bin.exists():
+            logging.warning(
+                "GCC binary not found at %s — toolchain not cached", gcc_bin
+            )
+            return
+
+        try:
+            tc_cache.pack(plan, BUILDROOT_VERSION, self.output_dir)
+        except Exception as exc:
+            logging.error(
+                "Failed to pack toolchain to cache (non-fatal): %s", exc
+            )
+
+    # ------------------------------------------------------------------
 
     def _extract_rootfs(self):
         rootfs_tar = self.output_dir / "images" / "rootfs.tar"
