@@ -19,7 +19,7 @@ import sys
 # Определение абсолютных путей
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
-TEMP_PATH = PROJECT_ROOT / "temp"
+TEMP_PATH = Path(os.environ.get("NETOS_TEMP_DIR", "") or PROJECT_ROOT / "temp")
 ROOTFS_PATH = PROJECT_ROOT / "container"
 SCHEMA_PATH = SCRIPT_DIR / "schema" / "system.ovsschema"
 NET_AGENT_PATH = SCRIPT_DIR / "agents" / "net_agent.py"
@@ -233,11 +233,13 @@ if __name__ == "__main__":
     linux_kernel.configure_kernel()
     linux_kernel.compile_kernel()
 
+    _cache_dir = os.environ.get("NETOS_CACHE_DIR", "") or None
     NetOSBuildrootBuilder(
         ROOTFS_PATH, TEMP_PATH, target,
         extra_packages=extra_packages,
         cache_policy=plan.cache_policy,
         extra_groups=extra_groups,
+        cache_dir=Path(_cache_dir) if _cache_dir else None,
     ).bootstrap()
 
     # Настройка контейнера
@@ -258,8 +260,15 @@ if __name__ == "__main__":
         stat_agent=STAT_AGENT_PATH,
         cli_tool=CLI_PATH,
     )
+    _img_output_dir  = os.environ.get("NETOS_IMAGE_OUTPUT_DIR", "") or None
+    _img_filename    = os.environ.get("NETOS_IMAGE_FILENAME", "") or None
+    _img_path: Path | None = None
+    if _img_output_dir or _img_filename:
+        _base = Path(_img_output_dir) if _img_output_dir else PROJECT_ROOT
+        _name = _img_filename if _img_filename else target.image_name
+        _img_path = _base / _name
     try:
-        create_img(target)
+        create_img(target, image_path=_img_path)
     except Exception as e:
         logging_adapter.error(f"Не удалось создать образ: {e}")
         sys.exit(1)

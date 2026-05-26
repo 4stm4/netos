@@ -58,4 +58,14 @@ def profile_to_env(profile: Profile) -> dict[str, str]:
         if profile.nervum.source == "local":
             env["NETOS_NERVUM_SOURCE_DIR"] = profile.nervum.source_dir
 
+    # paths
+    if profile.paths.temp_dir:
+        env["NETOS_TEMP_DIR"] = profile.paths.temp_dir
+    if profile.paths.cache_dir:
+        env["NETOS_CACHE_DIR"] = profile.paths.cache_dir
+    if profile.paths.image_output_dir:
+        env["NETOS_IMAGE_OUTPUT_DIR"] = profile.paths.image_output_dir
+    if profile.paths.image_filename:
+        env["NETOS_IMAGE_FILENAME"] = profile.paths.image_filename
+
     return env

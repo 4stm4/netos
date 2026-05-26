@@ -9,6 +9,7 @@ from src.configurator.routes.packages import router as packages_router
 from src.configurator.routes.profiles import router as profiles_router
 from src.configurator.routes.builds import router as builds_router
 from src.configurator.routes.cache import router as cache_router
+from src.configurator.routes.fs import router as fs_router
 
 _HERE = Path(__file__).parent
 _INDEX_HTML = _HERE / "templates" / "index.html"
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
     app.include_router(profiles_router, prefix="/api")
     app.include_router(builds_router, prefix="/api")
     app.include_router(cache_router, prefix="/api")
+    app.include_router(fs_router, prefix="/api")
 
     app.mount("/static", StaticFiles(directory=str(_HERE / "static")), name="static")
 

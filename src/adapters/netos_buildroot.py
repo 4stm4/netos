@@ -54,6 +54,7 @@ class NetOSBuildrootBuilder:
         extra_packages: "list[str] | tuple[str, ...] | None" = None,
         cache_policy: str = "",
         extra_groups: "list[str] | tuple[str, ...] | None" = None,
+        cache_dir: "Path | None" = None,
     ):
         self.rootfs_path = Path(rootfs_path)
         self.temp_path = Path(temp_path)
@@ -69,6 +70,12 @@ class NetOSBuildrootBuilder:
         self.external_dir = self.temp_path / "netos-buildroot-external"
         self.output_dir = self.temp_path / f"buildroot-output-{target.name}"
         self.defconfig_name = f"netos_{target.name.replace('-', '_')}_defconfig"
+        # cache_dir: explicit arg > NETOS_CACHE_DIR env var > <temp_path>/cache
+        _env_cache = os.environ.get("NETOS_CACHE_DIR", "")
+        self._cache_root: Path = (
+            cache_dir
+            or (Path(_env_cache) if _env_cache else self.temp_path / "cache")
+        )
 
     def bootstrap(self):
         self.temp_path.mkdir(parents=True, exist_ok=True)
@@ -443,7 +450,7 @@ fi
 
         from netos_build.toolchain_cache import ToolchainCache
         plan     = self._build_plan()
-        tc_cache = ToolchainCache(self.temp_path / "cache")
+        tc_cache = ToolchainCache(self._cache_root)
         key      = tc_cache.cache_key(plan, BUILDROOT_VERSION)
         archive  = tc_cache.archive_path(plan, BUILDROOT_VERSION)
 
@@ -472,7 +479,7 @@ fi
 
         from netos_build.toolchain_cache import ToolchainCache
         plan     = self._build_plan()
-        tc_cache = ToolchainCache(self.temp_path / "cache")
+        tc_cache = ToolchainCache(self._cache_root)
 
         if tc_cache.has(plan, BUILDROOT_VERSION):
             logging.info("Toolchain already cached — skipping pack")
@@ -527,7 +534,7 @@ fi
 
         from netos_build.rootfs_cache import RootfsCache
         plan      = self._build_plan()
-        rc_cache  = RootfsCache(self.temp_path / "cache")
+        rc_cache  = RootfsCache(self._cache_root)
         key       = rc_cache.cache_key(plan, BUILDROOT_VERSION)
         archive   = rc_cache.archive_path(plan, BUILDROOT_VERSION)
 
@@ -560,7 +567,7 @@ fi
 
         from netos_build.rootfs_cache import RootfsCache
         plan     = self._build_plan()
-        rc_cache = RootfsCache(self.temp_path / "cache")
+        rc_cache = RootfsCache(self._cache_root)
 
         if rc_cache.has(plan, BUILDROOT_VERSION):
             if self.cache_policy != "refresh":

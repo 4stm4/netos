@@ -92,6 +92,29 @@ class ImageConfig(BaseModel):
     boot_mb: int = 64
 
 
+class PathsConfig(BaseModel):
+    """Configurable filesystem paths for the build pipeline.
+
+    Empty string means "use the project default".
+    All paths are absolute on the build host.
+    """
+    # Where Buildroot unpacks, compiles, and stores its output tree.
+    # Default: <project_root>/temp
+    temp_dir: str = ""
+
+    # Where toolchain and rootfs cache archives are stored.
+    # Default: <temp_dir>/cache
+    cache_dir: str = ""
+
+    # Directory where the final .img file is written.
+    # Default: <project_root>
+    image_output_dir: str = ""
+
+    # Override the image filename (e.g. "myos-v2.img").
+    # Default: target's image_name (e.g. "netos-arm64.img")
+    image_filename: str = ""
+
+
 class Profile(BaseModel):
     name: str
     target: str = "qemu-virt"
@@ -101,6 +124,7 @@ class Profile(BaseModel):
     webui: WebUIConfig = WebUIConfig()
     nervum: NervumConfig = NervumConfig()
     image: ImageConfig = ImageConfig()
+    paths: PathsConfig = PathsConfig()
 
 
 class BuildEvent(BaseModel):
