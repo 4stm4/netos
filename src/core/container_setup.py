@@ -915,7 +915,18 @@ esac
         data_dir = os.environ.get("NETOS_WEBUI_DATA_DIR", "/opt/testum")
         vendor_packages = os.environ.get(
             "NETOS_NERVUM_VENDOR_PACKAGES",
-            "pydantic-settings structlog prometheus-client opentelemetry-api opentelemetry-sdk aiosqlite",
+            # Полный набор зависимостей sdn-controller (nervum):
+            # - HTTP: fastapi, uvicorn (ASGI-сервер), starlette, httpx
+            # - ORM: sqlalchemy, alembic, aiosqlite
+            # - Валидация: pydantic (v2), pydantic-settings
+            # - Async: anyio, sniffio
+            # - Логирование/метрики: structlog, prometheus-client
+            # - OpenTelemetry: opentelemetry-api, opentelemetry-sdk
+            "fastapi uvicorn[standard] starlette httpx "
+            "sqlalchemy alembic aiosqlite "
+            "pydantic pydantic-settings anyio sniffio "
+            "structlog prometheus-client "
+            "opentelemetry-api opentelemetry-sdk",
         )
         sdn_port = os.environ.get("NETOS_NERVUM_SDN_PORT", "8090")
 
