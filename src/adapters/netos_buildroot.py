@@ -1,14 +1,13 @@
-import hashlib
 import logging
 import os
 import shutil
 import subprocess
 import tarfile
-import urllib.request
 from pathlib import Path
 
 from netos_branding import NETOS_HOSTNAME, NETOS_ID, NETOS_NAME, NETOS_VERSION
 from targets import TargetConfig
+from netos_build.artifacts import ArtifactManager
 
 
 BUILDROOT_VERSION = os.environ.get("NETOS_BUILDROOT_VERSION", "2026.02.1")
@@ -74,15 +73,20 @@ class NetOSBuildrootBuilder:
         # Save toolchain hash after a successful build so next run can detect config changes
         self._save_toolchain_hash()
 
+    def _artifact_manager(self) -> ArtifactManager:
+        return ArtifactManager(self.temp_path)
+
     def _prepare_buildroot(self):
         if (self.buildroot_dir / "Makefile").exists():
             logging.info("Buildroot already exists: %s", self.buildroot_dir)
             return
 
-        archive = self.temp_path / f"buildroot-{BUILDROOT_VERSION}.tar.xz"
-        logging.info("Downloading Buildroot %s from %s", BUILDROOT_VERSION, BUILDROOT_URL)
-        self._download(BUILDROOT_URL, archive)
-        self._verify_sha256(archive, BUILDROOT_SHA256)
+        logging.info("Fetching Buildroot %s", BUILDROOT_VERSION)
+        archive = self._artifact_manager().fetch(
+            url=BUILDROOT_URL,
+            sha256=BUILDROOT_SHA256,
+            filename=f"buildroot-{BUILDROOT_VERSION}.tar.xz",
+        )
 
         extract_tmp = self.temp_path / f"buildroot-{BUILDROOT_VERSION}.extract"
         if extract_tmp.exists():
@@ -98,28 +102,6 @@ class NetOSBuildrootBuilder:
             shutil.rmtree(self.buildroot_dir)
         children[0].rename(self.buildroot_dir)
         shutil.rmtree(extract_tmp)
-
-    def _download(self, url: str, destination: Path):
-        if destination.exists():
-            logging.info("Using cached archive: %s", destination)
-            return
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        tmp = destination.with_suffix(destination.suffix + ".part")
-        try:
-            logging.info("Downloading %s -> %s", url, destination)
-            req = urllib.request.Request(url, headers={"User-Agent": "netos-build/1.0"})
-            with urllib.request.urlopen(req, timeout=300) as response, tmp.open("wb") as out:
-                shutil.copyfileobj(response, out)
-            tmp.rename(destination)
-        except Exception:
-            if tmp.exists():
-                tmp.unlink()
-            raise
-
-    def _verify_sha256(self, path: Path, expected: str):
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if digest != expected:
-            raise RuntimeError(f"SHA256 mismatch for {path}: got {digest}, expected {expected}")
 
     def _write_external_tree(self):
         if self.external_dir.exists():
