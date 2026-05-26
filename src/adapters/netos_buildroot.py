@@ -74,10 +74,12 @@ class NetOSBuildrootBuilder:
         self._prepare_buildroot()
         self._write_external_tree()
         self._configure_buildroot()
-        self._restore_toolchain_cache()   # try cache hit before make
-        self._build_rootfs()
+        self._restore_toolchain_cache()      # M3 — skip ~45min gcc build
+        if not self._restore_rootfs_cache(): # M5 — skip ~45min package build
+            self._build_rootfs()
+            self._pack_rootfs_cache()        # M5 — save rootfs for next run
         self._extract_rootfs()
-        self._pack_toolchain_cache()      # save new toolchain to cache
+        self._pack_toolchain_cache()         # M3 — save toolchain for next run
         # Save toolchain hash after a successful build so next run can detect config changes
         self._save_toolchain_hash()
 
@@ -491,6 +493,71 @@ fi
         except Exception as exc:
             logging.error(
                 "Failed to pack toolchain to cache (non-fatal): %s", exc
+            )
+
+    # ------------------------------------------------------------------
+    # Rootfs cache (M5)
+    # ------------------------------------------------------------------
+
+    def _restore_rootfs_cache(self) -> bool:
+        """Try to restore a pre-built rootfs.tar from cache.
+
+        Called after defconfig + toolchain restore and *before* ``make`` so
+        the expensive package-compilation step is skipped entirely when the
+        package set hasn't changed.
+
+        Returns True if rootfs.tar was successfully restored (caller must
+        skip _build_rootfs).  Returns False on cache miss or restore failure.
+        """
+        if self.cache_policy in ("rebuild", "refresh"):
+            logging.info("cache_policy=%s — skipping rootfs cache restore", self.cache_policy)
+            return False
+
+        from netos_build.rootfs_cache import RootfsCache
+        plan      = self._build_plan()
+        rc_cache  = RootfsCache(self.temp_path / "cache")
+        key       = rc_cache.cache_key(plan, BUILDROOT_VERSION)
+
+        if rc_cache.has(plan, BUILDROOT_VERSION):
+            logging.info("Rootfs cache hit: %s", key)
+            if rc_cache.restore(plan, BUILDROOT_VERSION, self.output_dir):
+                return True
+            # Restore failed (corrupt archive deleted) — fall through to rebuild
+
+        logging.info(
+            "Rootfs cache miss: %s — full Buildroot make required (~45 min)", key
+        )
+        return False
+
+    def _pack_rootfs_cache(self) -> None:
+        """Pack the just-built rootfs.tar into the cache for future use.
+
+        Non-fatal: if packing fails the build is still considered successful.
+        Skipped if the cache already has an entry for this key, or if
+        cache_policy == "rebuild".
+        """
+        if self.cache_policy == "rebuild":
+            return
+
+        from netos_build.rootfs_cache import RootfsCache
+        plan     = self._build_plan()
+        rc_cache = RootfsCache(self.temp_path / "cache")
+
+        if rc_cache.has(plan, BUILDROOT_VERSION):
+            if self.cache_policy != "refresh":
+                logging.info("Rootfs already cached — skipping pack")
+                return
+
+        rootfs_tar = self.output_dir / "images" / "rootfs.tar"
+        if not rootfs_tar.exists():
+            logging.warning("rootfs.tar not found — rootfs not cached")
+            return
+
+        try:
+            rc_cache.pack(plan, BUILDROOT_VERSION, self.output_dir)
+        except Exception as exc:
+            logging.error(
+                "Failed to pack rootfs to cache (non-fatal): %s", exc
             )
 
     # ------------------------------------------------------------------
