@@ -383,6 +383,31 @@ fi
     # Toolchain cache (M3)
     # ------------------------------------------------------------------
 
+    def _external_content_hash(self) -> str:
+        """Stable hash of all generated external-tree / overlay content.
+
+        Covers: openvswitch .mk + Config.in + .hash, post-build script,
+        overlay content generators, NETOS_VERSION, NETOS_HOSTNAME.
+
+        Changing any of these (e.g. bumping NETOS_VERSION when nervum ships)
+        produces a new rootfs cache key automatically — no manual cache flush.
+        """
+        import hashlib as _hashlib
+        parts = [
+            # external tree recipes
+            self._openvswitch_mk(),
+            self._openvswitch_config_in(),
+            self._openvswitch_hash(),
+            # post-build & overlay scripts (inline generators)
+            self._post_build_script(),
+            # branding constants baked into the image
+            f"NETOS_VERSION={NETOS_VERSION}",
+            f"NETOS_HOSTNAME={NETOS_HOSTNAME}",
+            f"NETOS_NAME={NETOS_NAME}",
+            f"OPENVSWITCH_VERSION={OPENVSWITCH_VERSION}",
+        ]
+        return _hashlib.md5("\n---\n".join(parts).encode()).hexdigest()[:16]
+
     def _build_plan(self):
         """Return a ResolvedBuildPlan for the current target (lazy import)."""
         from netos_build.plan import ResolvedBuildPlan
@@ -390,6 +415,7 @@ fi
             self.target,
             extra_packages=self.extra_packages,
             cache_policy=self.cache_policy,
+            external_hash=self._external_content_hash(),
         )
 
     def _cache_sync(self):

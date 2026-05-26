@@ -79,6 +79,14 @@ class ResolvedBuildPlan:
     # ── Extra packages (CLI --packages-file or configurator) ──────────────
     extra_packages: tuple[str, ...] = field(default_factory=tuple)
 
+    # ── External tree / overlay content hash ──────────────────────────────
+    # Hash of the generated external-tree content (overlay files, .mk files,
+    # post-build scripts, NETOS_VERSION, etc.).  When any of these change the
+    # rootfs cache key changes automatically, preventing stale cache hits after
+    # nervum or other in-tree packages are updated.
+    # Empty string means "not provided" → old behaviour (hash only packages).
+    external_hash: str = ""
+
     # ── Future fields (stubs, filled in by later milestones) ──────────────
     # edition:   str = "base"        # M6+: base | hypervisor | storage | gui
     # ui_profile: str = "testum"     # M6+
@@ -104,11 +112,16 @@ class ResolvedBuildPlan:
         t: "TargetConfig",
         extra_packages: "list[str] | tuple[str, ...] | None" = None,
         cache_policy: str = "use",
+        external_hash: str = "",
     ) -> "ResolvedBuildPlan":
         """Compatibility adapter: ``TargetConfig`` → ``ResolvedBuildPlan``.
 
         All existing call-sites that use ``TargetConfig`` continue to work
         by passing the config through this method.
+
+        ``external_hash`` should be the output of
+        ``NetOSBuildrootBuilder._external_content_hash()`` so that rootfs cache
+        keys change automatically when overlay / .mk / NETOS_VERSION changes.
         """
         return cls(
             target            = t.name,
@@ -131,6 +144,7 @@ class ResolvedBuildPlan:
             qemu_root_device  = t.qemu_root_device,
             extra_packages    = tuple(extra_packages or []),
             cache_policy      = cache_policy,
+            external_hash     = external_hash,
         )
 
     # ------------------------------------------------------------------
@@ -143,8 +157,15 @@ class ResolvedBuildPlan:
         return self.packages + self.extra_packages
 
     def packages_hash(self) -> str:
-        """Stable 16-char hex hash of the full package set (used as cache key)."""
+        """Stable 16-char hex hash covering packages + external tree content.
+
+        Mixing in ``external_hash`` ensures the rootfs cache key changes
+        whenever generated overlay files, .mk recipes, NETOS_VERSION, or any
+        other in-tree content changes — even if the package *list* stays the same.
+        """
         joined = "\n".join(sorted(self.all_packages))
+        if self.external_hash:
+            joined += "\n__external__\n" + self.external_hash
         return hashlib.md5(joined.encode()).hexdigest()[:16]
 
     def toolchain_cache_key(self) -> str:
