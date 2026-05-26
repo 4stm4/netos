@@ -921,12 +921,12 @@ esac
             # - Валидация: pydantic (v2), pydantic-settings
             # - Async: anyio, sniffio
             # - Логирование/метрики: structlog, prometheus-client
-            # - OpenTelemetry: opentelemetry-api, opentelemetry-sdk
+            # - OpenTelemetry: api + sdk + semconv (namespace package — нужны все три вместе)
             "fastapi uvicorn[standard] starlette httpx "
             "sqlalchemy alembic aiosqlite "
             "pydantic pydantic-settings anyio sniffio "
             "structlog prometheus-client "
-            "opentelemetry-api opentelemetry-sdk",
+            "opentelemetry-api opentelemetry-sdk opentelemetry-semantic-conventions",
         )
         sdn_port = os.environ.get("NETOS_NERVUM_SDN_PORT", "8090")
 
