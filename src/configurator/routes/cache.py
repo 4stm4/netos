@@ -256,3 +256,111 @@ def save_cache_hash(target: str) -> dict[str, Any]:
     h = _compute_defconfig_hash(target)
     _save_hash(out_dir, h)
     return {"ok": True, "hash": h}
+
+
+# ---------------------------------------------------------------------------
+# Artifact cache (M3 toolchains / M5 rootfs archives)
+# ---------------------------------------------------------------------------
+
+_ARTIFACT_CACHE_ROOT = _TEMP_PATH / "cache"
+_ARTIFACT_DIRS = ("toolchains", "rootfs")
+
+
+def _artifact_cache_dir(subdir: str) -> Path:
+    return _ARTIFACT_CACHE_ROOT / subdir
+
+
+@router.get("/artifact-cache/stats")
+def artifact_cache_stats() -> dict[str, Any]:
+    """Статистика артефактного кэша — toolchains/ и rootfs/ архивы."""
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from netos_build.cache_eviction import CacheEvictor
+
+    result: dict[str, Any] = {}
+    for subdir in _ARTIFACT_DIRS:
+        d = _artifact_cache_dir(subdir)
+        s = CacheEvictor(d).stats()
+        result[subdir] = s
+    return result
+
+
+class EvictRequest(BaseModel):
+    dir: str               # "toolchains" | "rootfs" | "all"
+    max_size_mb:  float | None = None
+    max_age_days: float | None = None
+    max_entries:  int   | None = None
+    dry_run: bool = False
+
+
+@router.post("/artifact-cache/evict")
+def artifact_cache_evict(req: EvictRequest) -> dict[str, Any]:
+    """Запустить вытеснение по заданной политике."""
+    if req.dir not in _ARTIFACT_DIRS and req.dir != "all":
+        raise HTTPException(status_code=422, detail=f"dir must be one of {_ARTIFACT_DIRS} or 'all'")
+
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from netos_build.cache_eviction import CacheEvictor
+
+    dirs_to_evict = list(_ARTIFACT_DIRS) if req.dir == "all" else [req.dir]
+    total_deleted = 0
+    total_freed_mb = 0.0
+    details: dict[str, Any] = {}
+
+    for subdir in dirs_to_evict:
+        d = _artifact_cache_dir(subdir)
+        ev = CacheEvictor(
+            d,
+            max_size_mb  = req.max_size_mb,
+            max_age_days = req.max_age_days,
+            max_entries  = req.max_entries,
+        )
+        deleted = ev.evict(dry_run=req.dry_run)
+        freed_mb = sum(p.stat().st_size for p in deleted if p.exists()) / 1e6 if not req.dry_run else 0.0
+        total_deleted  += len(deleted)
+        total_freed_mb += freed_mb
+        details[subdir] = {"deleted": len(deleted), "freed_mb": round(freed_mb, 1)}
+
+    return {
+        "ok": True,
+        "dry_run": req.dry_run,
+        "total_deleted": total_deleted,
+        "total_freed_mb": round(total_freed_mb, 1),
+        "details": details,
+    }
+
+
+@router.delete("/artifact-cache/{subdir}/{key}")
+def artifact_cache_delete_entry(subdir: str, key: str) -> dict[str, Any]:
+    """Удалить одну запись из артефактного кэша по ключу."""
+    import json as _json
+
+    if subdir not in _ARTIFACT_DIRS:
+        raise HTTPException(status_code=422, detail=f"subdir must be one of {_ARTIFACT_DIRS}")
+
+    d = _artifact_cache_dir(subdir)
+    if not d.exists():
+        raise HTTPException(status_code=404, detail="cache dir not found")
+
+    # Find archive files matching the key
+    deleted_files: list[str] = []
+    for pattern in ("*.tar.gz", "*.rootfs.tar.gz"):
+        for p in d.glob(pattern):
+            stem = p.name.replace(".rootfs.tar.gz", "").replace(".tar.gz", "")
+            if stem == key:
+                p.unlink(missing_ok=True)
+                deleted_files.append(p.name)
+
+    if not deleted_files:
+        raise HTTPException(status_code=404, detail=f"archive for key '{key}' not found")
+
+    # Update index.json
+    index_path = d / "index.json"
+    if index_path.exists():
+        try:
+            idx = _json.loads(index_path.read_text())
+            idx.pop(key, None)
+            index_path.write_text(_json.dumps(idx, indent=2, ensure_ascii=False))
+        except Exception:
+            pass
+
+    return {"ok": True, "deleted": deleted_files}
