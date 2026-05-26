@@ -71,6 +71,8 @@ class NetOSBuildrootBuilder:
         self._configure_buildroot()
         self._build_rootfs()
         self._extract_rootfs()
+        # Save toolchain hash after a successful build so next run can detect config changes
+        self._save_toolchain_hash()
 
     def _prepare_buildroot(self):
         if (self.buildroot_dir / "Makefile").exists():
@@ -102,8 +104,17 @@ class NetOSBuildrootBuilder:
             logging.info("Using cached archive: %s", destination)
             return
         destination.parent.mkdir(parents=True, exist_ok=True)
-        with urllib.request.urlopen(url) as response, destination.open("wb") as out:
-            shutil.copyfileobj(response, out)
+        tmp = destination.with_suffix(destination.suffix + ".part")
+        try:
+            logging.info("Downloading %s -> %s", url, destination)
+            req = urllib.request.Request(url, headers={"User-Agent": "netos-build/1.0"})
+            with urllib.request.urlopen(req, timeout=300) as response, tmp.open("wb") as out:
+                shutil.copyfileobj(response, out)
+            tmp.rename(destination)
+        except Exception:
+            if tmp.exists():
+                tmp.unlink()
+            raise
 
     def _verify_sha256(self, path: Path, expected: str):
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -335,9 +346,67 @@ fi
             ]
         )
 
+    def _toolchain_hash(self) -> str:
+        """Hash of toolchain-relevant defconfig fields; used to detect when gcc-final must be rebuilt."""
+        import hashlib as _hashlib
+        parts = [
+            f"arch={self.target.buildroot_arch}",
+            f"kernel_source={self.target.kernel_source}",
+            f"kernel_arch={self.target.kernel_arch}",
+            f"cross_compile={self.target.cross_compile}",
+            "BR2_TOOLCHAIN_BUILDROOT_GLIBC=y",
+            "BR2_TOOLCHAIN_BUILDROOT_CXX=y",
+        ]
+        return _hashlib.md5("\n".join(parts).encode()).hexdigest()
+
+    _HASH_FILE = ".last_toolchain_hash"
+
+    def _read_saved_toolchain_hash(self) -> str:
+        p = self.output_dir / self._HASH_FILE
+        return p.read_text().strip() if p.exists() else ""
+
+    def _save_toolchain_hash(self) -> None:
+        (self.output_dir / self._HASH_FILE).write_text(self._toolchain_hash())
+
+    def _clear_gcc_final_stamps(self) -> None:
+        """Remove gcc-final build stamps so Buildroot reconfigures GCC with updated options."""
+        import glob as _glob
+        build_dir = self.output_dir / "build"
+        # Virtual toolchain packages
+        for d in ["toolchain-buildroot", "toolchain-buildroot-aux", "toolchain-buildroot-initial"]:
+            stamp_dir = build_dir / d
+            if stamp_dir.exists():
+                shutil.rmtree(stamp_dir)
+        # host-gcc-final stamps that lock in --enable-languages
+        for gcc_dir in _glob.glob(str(build_dir / "host-gcc-final-*")):
+            for stamp in ["built", "configured", "host_installed", "installed",
+                          "staging_installed", "target_installed"]:
+                p = Path(gcc_dir) / f".stamp_{stamp}"
+                if p.exists():
+                    p.unlink()
+        # Remove stale cross-compiler binaries so the stale-check in the configurator resets
+        prefix = f"{self.target.buildroot_arch}-buildroot-linux-gnu"
+        for suffix in ["-g++", "-c++"]:
+            b = self.output_dir / "host" / "bin" / f"{prefix}{suffix}"
+            if b.exists():
+                b.unlink()
+        logging.info("Cleared gcc-final stamps — toolchain will be reconfigured with updated options")
+
     def _configure_buildroot(self):
         logging.info("Configuring Buildroot defconfig: %s", self.defconfig_name)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Auto-detect toolchain config changes and clear gcc-final stamps before re-configuring
+        current_hash = self._toolchain_hash()
+        saved_hash   = self._read_saved_toolchain_hash()
+        if saved_hash and saved_hash != current_hash:
+            logging.warning(
+                "Toolchain config changed since last build (hash %s → %s); "
+                "clearing gcc-final stamps to force C++ rebuild",
+                saved_hash[:8], current_hash[:8],
+            )
+            self._clear_gcc_final_stamps()
+
         subprocess.run(
             [
                 "make",
@@ -370,4 +439,18 @@ fi
         if not rootfs_tar.exists():
             raise FileNotFoundError(f"Buildroot rootfs archive not found: {rootfs_tar}")
         logging.info("Extracting Buildroot rootfs into %s", self.rootfs_path)
-        subprocess.run(["tar", "-xf", str(rootfs_tar), "-C", str(self.rootfs_path)], check=True)
+        # Device nodes and setuid bits require root to extract correctly.
+        # Try fakeroot first (preserves metadata without real root), fall back to sudo.
+        if shutil.which("fakeroot"):
+            subprocess.run(
+                ["fakeroot", "tar", "-xf", str(rootfs_tar), "-C", str(self.rootfs_path)],
+                check=True,
+            )
+        else:
+            logging.warning(
+                "fakeroot not found; falling back to sudo tar for device node extraction"
+            )
+            subprocess.run(
+                ["sudo", "tar", "-xf", str(rootfs_tar), "-C", str(self.rootfs_path)],
+                check=True,
+            )

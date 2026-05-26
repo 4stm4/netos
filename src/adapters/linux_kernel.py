@@ -272,8 +272,8 @@ class LinuxKernel:
         subprocess.run(
             [
                 "make",
-                "ARCH=arm64",
-                "CROSS_COMPILE=aarch64-linux-gnu-",
+                f"ARCH={self.kernel_arch}",
+                f"CROSS_COMPILE={self.cross_compile}",
                 self.rpi_model,
             ],
             check=True,
@@ -286,11 +286,19 @@ class LinuxKernel:
             logging.info("Prebuilt kernel Image задан, конфигурацию ядра пропускаем.")
             return
 
-        logging.info("Настраиваем параметры ядра для ARM64 (source=%s)...", self.kernel_source)
+        logging.info(
+            "Настраиваем параметры ядра для ARCH=%s (source=%s)...",
+            self.kernel_arch, self.kernel_source,
+        )
 
         if self.kernel_source == "mainline":
             subprocess.run(
-                ["make", "ARCH=arm64", "CROSS_COMPILE=aarch64-linux-gnu-", "defconfig"],
+                [
+                    "make",
+                    f"ARCH={self.kernel_arch}",
+                    f"CROSS_COMPILE={self.cross_compile}",
+                    "defconfig",
+                ],
                 check=True,
                 cwd=self.rpi_repo_path,
             )
@@ -300,7 +308,12 @@ class LinuxKernel:
             except FileNotFoundError as e:
                 logging.error(f"Ошибка: {e}. Переходим к стандартной конфигурации.")
                 subprocess.run(
-                    ["make", "ARCH=arm64", "CROSS_COMPILE=aarch64-linux-gnu-", "defconfig"],
+                    [
+                        "make",
+                        f"ARCH={self.kernel_arch}",
+                        f"CROSS_COMPILE={self.cross_compile}",
+                        "defconfig",
+                    ],
                     check=True,
                     cwd=self.rpi_repo_path,
                 )
@@ -315,8 +328,8 @@ class LinuxKernel:
         subprocess.run(
             [
                 "make",
-                "ARCH=arm64",
-                "CROSS_COMPILE=aarch64-linux-gnu-",
+                f"ARCH={self.kernel_arch}",
+                f"CROSS_COMPILE={self.cross_compile}",
                 "olddefconfig",
             ],
             check=True,
@@ -347,8 +360,8 @@ class LinuxKernel:
             [
                 "make",
                 f"-j{jobs}",
-                "ARCH=arm64",
-                "CROSS_COMPILE=aarch64-linux-gnu-",
+                f"ARCH={self.kernel_arch}",
+                f"CROSS_COMPILE={self.cross_compile}",
                 *make_targets,
             ],
             check=True,
@@ -371,8 +384,8 @@ class LinuxKernel:
                 subprocess.run(
                     [
                         "make",
-                        "ARCH=arm64",
-                        "CROSS_COMPILE=aarch64-linux-gnu-",
+                        f"ARCH={self.kernel_arch}",
+                        f"CROSS_COMPILE={self.cross_compile}",
                         f"INSTALL_MOD_PATH={self.rootfs_path}",
                         "modules_install",
                     ],
@@ -444,6 +457,17 @@ class LinuxKernel:
                     source.parent.mkdir(parents=True, exist_ok=True)
                     url = f"{RPI_FIRMWARE_BASE_URL.rstrip('/')}/{rel_path}"
                     logging.info("Downloading Raspberry Pi firmware: %s", url)
-                    urllib.request.urlretrieve(url, source)
+                    tmp = source.with_suffix(source.suffix + ".part")
+                    try:
+                        req = urllib.request.Request(
+                            url, headers={"User-Agent": "netos-build/1.0"}
+                        )
+                        with urllib.request.urlopen(req, timeout=120) as resp, tmp.open("wb") as f:
+                            shutil.copyfileobj(resp, f)
+                        tmp.rename(source)
+                    except Exception:
+                        if tmp.exists():
+                            tmp.unlink()
+                        raise
             shutil.copy2(source, destination)
             logging.info("Скопирован firmware-файл: %s -> %s", source, destination)

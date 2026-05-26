@@ -231,3 +231,4 @@ if __name__ == "__main__":
         create_img(target)
     except Exception as e:
         logging_adapter.error(f"Не удалось создать образ: {e}")
+        sys.exit(1)
