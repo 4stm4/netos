@@ -4,10 +4,11 @@ from adapters.logging_adapter import LoggingAdapter
 from adapters.network_adapter import NetworkAdapter
 from adapters.package_installer import install_dependencies
 from adapters.linux_kernel import LinuxKernel
-from adapters.netos_buildroot import NetOSBuildrootBuilder
+from adapters.netos_buildroot import NetOSBuildrootBuilder, BUILDROOT_VERSION, BUILDROOT_URL, BUILDROOT_SHA256, OPENVSWITCH_VERSION
 from make_image import create_img
 from netos_branding import NETOS_HOSTNAME
 from targets import TARGETS, get_target
+from netos_build import ResolvedBuildPlan, LockFile
 import argparse
 import os
 from pathlib import Path
@@ -167,6 +168,14 @@ if __name__ == "__main__":
     if args.packages_file:
         extra_packages = _load_extra_packages(args.packages_file)
 
+    # Build plan — central model for this build
+    cache_policy = os.environ.get("NETOS_CACHE_POLICY", "use")
+    plan = ResolvedBuildPlan.from_target(target, extra_packages=extra_packages, cache_policy=cache_policy)
+
+    # Lock file — load if present; consulted by ArtifactManager in later milestones
+    lock = LockFile(PROJECT_ROOT / "netos.lock.json")
+    lock.load()
+
     if platform.system() != "Linux":
         sys.exit(
             "Полная сборка rootfs и образа поддерживается только на Linux. "
@@ -196,7 +205,10 @@ if __name__ == "__main__":
         cross_compile=target.cross_compile,
     )
 
-    logging_adapter.info(f"Собираем target: {target.name} ({target.description})")
+    logging_adapter.info(
+        "Собираем target: %s (%s) | arch=%s | cache_policy=%s",
+        plan.target, target.description, plan.arch, plan.cache_policy,
+    )
     file_adapter.clear_container()
     ROOTFS_PATH.mkdir(parents=True, exist_ok=True)
     # Инициализация контейнера
@@ -232,3 +244,9 @@ if __name__ == "__main__":
     except Exception as e:
         logging_adapter.error(f"Не удалось создать образ: {e}")
         sys.exit(1)
+
+    # Update lock file with the artifact versions actually used in this build
+    lock.record("buildroot",   version=BUILDROOT_VERSION,   url=BUILDROOT_URL,   sha256=BUILDROOT_SHA256)
+    lock.record("openvswitch", version=OPENVSWITCH_VERSION, url=f"https://www.openvswitch.org/releases/openvswitch-{OPENVSWITCH_VERSION}.tar.gz", sha256="")
+    lock.save()
+    logging_adapter.info("Build complete. Lock file: %s", PROJECT_ROOT / "netos.lock.json")
