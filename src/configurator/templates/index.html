@@ -156,6 +156,103 @@
           </div>
         </template>
       </section>
+
+      <!-- ── Artifact Cache (M3/M5 archives) ─────────────────── -->
+      <section>
+        <div class="section-label">Артефактный кэш (toolchains / rootfs архивы)
+          <button class="btn-sm" style="margin-left:8px" @click="refreshArtifactCache()" :disabled="artifactLoading">↻ Обновить</button>
+        </div>
+
+        <div x-show="artifactLoading" style="color:var(--muted);margin-top:12px">Загрузка…</div>
+
+        <template x-if="artifactCache && !artifactLoading">
+          <div>
+            <template x-for="subdir in ['toolchains','rootfs']" :key="subdir">
+              <div style="margin-top:16px">
+                <div style="font-weight:600;margin-bottom:6px;text-transform:uppercase;font-size:12px;letter-spacing:.05em" x-text="subdir"></div>
+
+                <template x-if="artifactCache[subdir] && artifactCache[subdir].count > 0">
+                  <div>
+                    <div class="env-row">
+                      <span class="env-label">Всего</span>
+                      <span class="env-val">
+                        <strong x-text="artifactCache[subdir].count"></strong> архивов,
+                        <strong x-text="artifactCache[subdir].total_mb + ' MB'"></strong>
+                        — старейший <span x-text="artifactCache[subdir].oldest_days + ' д.'"></span>
+                        назад
+                      </span>
+                    </div>
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">
+                      <thead>
+                        <tr style="color:var(--muted);text-align:left">
+                          <th style="padding:3px 6px;font-weight:500">Ключ</th>
+                          <th style="padding:3px 6px;font-weight:500;text-align:right">Размер</th>
+                          <th style="padding:3px 6px;font-weight:500;text-align:right">Возраст</th>
+                          <th style="padding:3px 6px"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <template x-for="e in artifactCache[subdir].entries" :key="e.key">
+                          <tr style="border-top:1px solid var(--border)">
+                            <td style="padding:4px 6px" class="mono" x-text="e.key" :title="e.packed_at"></td>
+                            <td style="padding:4px 6px;text-align:right;white-space:nowrap" x-text="e.size_mb + ' MB'"></td>
+                            <td style="padding:4px 6px;text-align:right;white-space:nowrap" x-text="e.age_days + ' д.'"></td>
+                            <td style="padding:4px 6px;text-align:right">
+                              <button class="btn-danger" style="padding:2px 8px;font-size:12px"
+                                @click="deleteArtifactEntry(subdir, e.key)">✕</button>
+                            </td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                </template>
+                <template x-if="!artifactCache[subdir] || artifactCache[subdir].count === 0">
+                  <div style="color:var(--muted);font-size:13px">Архивов нет</div>
+                </template>
+              </div>
+            </template>
+
+            <!-- Eviction controls -->
+            <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+              <div class="section-label" style="margin-bottom:10px">Вытеснение (LRU)</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:12px">
+                <div class="field">
+                  <label>Каталог</label>
+                  <select x-model="evictForm.dir" class="full-width">
+                    <option value="all">Все</option>
+                    <option value="toolchains">toolchains</option>
+                    <option value="rootfs">rootfs</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Макс. записей</label>
+                  <input type="number" min="1" x-model="evictForm.max_entries" placeholder="не задано" class="full-width">
+                </div>
+                <div class="field">
+                  <label>Макс. возраст (дней)</label>
+                  <input type="number" min="1" x-model="evictForm.max_age_days" placeholder="не задано" class="full-width">
+                </div>
+                <div class="field">
+                  <label>Макс. размер (MB)</label>
+                  <input type="number" min="1" x-model="evictForm.max_size_mb" placeholder="не задано" class="full-width">
+                </div>
+              </div>
+              <div class="btn-row" style="flex-wrap:wrap;gap:8px;align-items:center">
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                  <input type="checkbox" x-model="evictForm.dry_run"> Dry-run
+                </label>
+                <button class="btn-secondary" @click="evictArtifact()" :disabled="evicting">
+                  <span x-show="!evicting">Запустить вытеснение</span>
+                  <span x-show="evicting">…</span>
+                </button>
+              </div>
+            </div>
+
+            <div x-show="artifactMsg" class="env-msg" x-text="artifactMsg" style="margin-top:10px"></div>
+          </div>
+        </template>
+      </section>
     </div>
 
     <!-- ── Step 2: Target ──────────────────────────────────────── -->
@@ -552,6 +649,11 @@ function app() {
     cacheLoading: false,
     cacheClearing: false,
     cacheMsg: '',
+    artifactCache: null,
+    artifactLoading: false,
+    artifactMsg: '',
+    evictForm: { dir:'all', max_entries:'', max_age_days:'', max_size_mb:'', dry_run:false },
+    evicting: false,
 
     async init() {
       const [t, p, d, pr] = await Promise.all([
@@ -565,6 +667,7 @@ function app() {
       this.defaultKeys = d.keys
       this.profiles  = pr
       this.refreshCache()
+      this.refreshArtifactCache()
     },
 
     // ── computed ───────────────────────────────────────────────
@@ -759,6 +862,54 @@ function app() {
       if (!iso) return ''
       const d = new Date(iso)
       return d.toLocaleDateString('ru-RU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+    },
+
+    async refreshArtifactCache() {
+      this.artifactLoading = true
+      this.artifactMsg = ''
+      try {
+        this.artifactCache = await fetch('/api/artifact-cache/stats').then(r => r.json())
+      } finally {
+        this.artifactLoading = false
+      }
+    },
+
+    async evictArtifact() {
+      this.evicting = true
+      this.artifactMsg = this.evictForm.dry_run ? 'Dry-run…' : 'Вытеснение…'
+      try {
+        const body = {
+          dir: this.evictForm.dir,
+          dry_run: this.evictForm.dry_run,
+          max_entries:  this.evictForm.max_entries  ? parseInt(this.evictForm.max_entries)  : null,
+          max_age_days: this.evictForm.max_age_days ? parseFloat(this.evictForm.max_age_days) : null,
+          max_size_mb:  this.evictForm.max_size_mb  ? parseFloat(this.evictForm.max_size_mb)  : null,
+        }
+        const r = await fetch('/api/artifact-cache/evict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }).then(r => r.json())
+        if (r.ok) {
+          const prefix = this.evictForm.dry_run ? '[dry-run] ' : ''
+          this.artifactMsg = `${prefix}✓ Удалено: ${r.total_deleted} архивов, освобождено: ${r.total_freed_mb} MB`
+        }
+        await this.refreshArtifactCache()
+      } finally {
+        this.evicting = false
+      }
+    },
+
+    async deleteArtifactEntry(subdir, key) {
+      if (!confirm(`Удалить ${key} из ${subdir}?`)) return
+      this.artifactMsg = `Удаление ${key}…`
+      try {
+        const r = await fetch(`/api/artifact-cache/${subdir}/${key}`, { method: 'DELETE' }).then(r => r.json())
+        this.artifactMsg = r.ok ? `✓ Удалён ${key}` : `Ошибка: ${JSON.stringify(r)}`
+        await this.refreshArtifactCache()
+      } catch (e) {
+        this.artifactMsg = `Ошибка: ${e}`
+      }
     },
   }
 }
