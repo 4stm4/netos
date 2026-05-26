@@ -2,9 +2,10 @@ import logging
 import os
 import shutil
 import subprocess
-import urllib.request
 from pathlib import Path
 from typing import Iterable, Optional, Union
+
+from netos_build.artifacts import ArtifactManager
 
 
 RPI_REPO_URL = "https://github.com/raspberrypi/linux.git"
@@ -26,7 +27,8 @@ RPI_FIRMWARE_BASE_URL = _env(
     legacy_name="LITAINER_RPI_FIRMWARE_BASE_URL",
 )
 
-MAINLINE_KERNEL_VERSION = _env("NETOS_MAINLINE_KERNEL_VERSION", "6.12.27")
+MAINLINE_KERNEL_VERSION      = _env("NETOS_MAINLINE_KERNEL_VERSION", "6.12.27")
+MAINLINE_KERNEL_SHA256       = _env("NETOS_MAINLINE_KERNEL_SHA256")  # optional; verified if set
 
 
 class LinuxKernel:
@@ -98,15 +100,14 @@ class LinuxKernel:
     def _download_mainline_kernel(self):
         """Скачивает и распаковывает mainline-ядро с kernel.org."""
         version = MAINLINE_KERNEL_VERSION
-        major = version.split(".")[0]
+        major   = version.split(".")[0]
         filename = f"linux-{version}.tar.xz"
-        url = f"{MAINLINE_KERNEL_BASE_URL}/v{major}.x/{filename}"
-        archive = self.temp_path / filename
+        url      = f"{MAINLINE_KERNEL_BASE_URL}/v{major}.x/{filename}"
         extract_tmp = self.temp_path / "mainline_linux.extract"
 
         if self.rpi_repo_path.exists() and (self.rpi_repo_path / "Makefile").exists():
-            current = (self.rpi_repo_path / "include/config/kernel.release").read_text().strip() \
-                if (self.rpi_repo_path / "include/config/kernel.release").exists() else ""
+            release_file = self.rpi_repo_path / "include/config/kernel.release"
+            current = release_file.read_text().strip() if release_file.exists() else ""
             if version in current:
                 logging.info("Mainline kernel %s уже распакован: %s", version, self.rpi_repo_path)
                 return
@@ -117,17 +118,11 @@ class LinuxKernel:
             shutil.rmtree(extract_tmp)
         extract_tmp.mkdir(parents=True)
 
-        if not archive.exists():
-            logging.info("Скачиваем mainline kernel %s: %s", version, url)
-            try:
-                subprocess.run(
-                    ["wget", "-O", str(archive), "--tries=3", "--timeout=60", url],
-                    check=True,
-                )
-            except subprocess.CalledProcessError:
-                if archive.exists():
-                    archive.unlink()
-                raise
+        archive = ArtifactManager(self.temp_path).fetch(
+            url=url,
+            sha256=MAINLINE_KERNEL_SHA256,
+            filename=filename,
+        )
 
         logging.info("Распаковываем %s...", archive)
         subprocess.run(
@@ -441,8 +436,7 @@ class LinuxKernel:
 
         source_dir_raw = _env("NETOS_RPI_FIRMWARE_DIR", legacy_name="LITAINER_RPI_FIRMWARE_DIR")
         source_dir = Path(source_dir_raw).expanduser() if source_dir_raw else None
-        cache_dir = self.temp_path / "rpi_firmware_boot"
-        cache_dir.mkdir(parents=True, exist_ok=True)
+        mgr = ArtifactManager(self.temp_path)
 
         for rel_path in self.boot_firmware_files:
             destination = boot_dir / rel_path
@@ -452,22 +446,12 @@ class LinuxKernel:
                 if not source.exists():
                     raise FileNotFoundError(f"Raspberry Pi firmware file not found: {source}")
             else:
-                source = cache_dir / rel_path
-                if not source.exists():
-                    source.parent.mkdir(parents=True, exist_ok=True)
-                    url = f"{RPI_FIRMWARE_BASE_URL.rstrip('/')}/{rel_path}"
-                    logging.info("Downloading Raspberry Pi firmware: %s", url)
-                    tmp = source.with_suffix(source.suffix + ".part")
-                    try:
-                        req = urllib.request.Request(
-                            url, headers={"User-Agent": "netos-build/1.0"}
-                        )
-                        with urllib.request.urlopen(req, timeout=120) as resp, tmp.open("wb") as f:
-                            shutil.copyfileobj(resp, f)
-                        tmp.rename(source)
-                    except Exception:
-                        if tmp.exists():
-                            tmp.unlink()
-                        raise
+                # Firmware files have no known SHA-256 — cache by filename only
+                url    = f"{RPI_FIRMWARE_BASE_URL.rstrip('/')}/{rel_path}"
+                source = mgr.fetch(
+                    url=url,
+                    filename=f"rpi_firmware_{rel_path.replace('/', '_')}",
+                    timeout=120,
+                )
             shutil.copy2(source, destination)
             logging.info("Скопирован firmware-файл: %s -> %s", source, destination)
