@@ -84,10 +84,20 @@ def _validate_boot_files(target: TargetConfig):
         )
 
 
-def create_img(target: Union[str, TargetConfig] = "pi5"):
+def create_img(
+    target: Union[str, TargetConfig] = "pi5",
+    image_path: "Path | None" = None,
+):
+    """Create a raw disk image for *target*.
+
+    *image_path* overrides the default location (``PROJECT_ROOT / target.image_name``).
+    Set via ``NETOS_IMAGE_OUTPUT_DIR`` + ``NETOS_IMAGE_FILENAME`` env vars or
+    programmatically from the configurator.
+    """
     target = _resolve_target(target)
     image_size_mb, boot_size_mb = _image_layout(target)
-    img_path = PROJECT_ROOT / target.image_name
+    img_path = image_path if image_path is not None else PROJECT_ROOT / target.image_name
+    img_path.parent.mkdir(parents=True, exist_ok=True)
     boot_loop = None
     root_loop = None
     mounted = []

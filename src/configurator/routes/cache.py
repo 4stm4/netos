@@ -262,12 +262,18 @@ def save_cache_hash(target: str) -> dict[str, Any]:
 # Artifact cache (M3 toolchains / M5 rootfs archives)
 # ---------------------------------------------------------------------------
 
-_ARTIFACT_CACHE_ROOT = _TEMP_PATH / "cache"
 _ARTIFACT_DIRS = ("toolchains", "rootfs")
 
 
+def _artifact_cache_root() -> Path:
+    """Resolve cache root: NETOS_CACHE_DIR env var > default temp/cache."""
+    import os as _os
+    env = _os.environ.get("NETOS_CACHE_DIR", "").strip()
+    return Path(env) if env else _TEMP_PATH / "cache"
+
+
 def _artifact_cache_dir(subdir: str) -> Path:
-    return _ARTIFACT_CACHE_ROOT / subdir
+    return _artifact_cache_root() / subdir
 
 
 @router.get("/artifact-cache/stats")

@@ -253,6 +253,74 @@
           </div>
         </template>
       </section>
+
+      <!-- ── Пути ────────────────────────────────────────────────── -->
+      <section>
+        <div class="section-label">Пути сборки</div>
+        <div class="form-grid" style="margin-top:10px">
+
+          <!-- Temp / build dir -->
+          <div class="field field-full">
+            <label>Директория сборки (temp)
+              <span class="field-hint">Buildroot, ядро, output-дерево.
+                По умолчанию: <code>&lt;project&gt;/temp</code></span>
+            </label>
+            <input x-model="profile.paths.temp_dir"
+              @input.debounce.600ms="statPath('temp_dir', profile.paths.temp_dir)"
+              placeholder="/data/netos/temp  (пусто = по умолчанию)">
+            <div x-show="profile.paths.temp_dir && pathStats.temp_dir"
+              class="path-hint" :class="pathHintClass('temp_dir')"
+              x-text="pathHint('temp_dir')"></div>
+          </div>
+
+          <!-- Cache dir -->
+          <div class="field field-full">
+            <label>Директория кэша
+              <span class="field-hint">Архивы toolchain и rootfs.
+                По умолчанию: <code>&lt;temp&gt;/cache</code></span>
+            </label>
+            <input x-model="profile.paths.cache_dir"
+              @input.debounce.600ms="statPath('cache_dir', profile.paths.cache_dir)"
+              placeholder="/data/netos/cache  (пусто = по умолчанию)">
+            <div x-show="profile.paths.cache_dir && pathStats.cache_dir"
+              class="path-hint" :class="pathHintClass('cache_dir')"
+              x-text="pathHint('cache_dir')"></div>
+          </div>
+
+          <!-- Image output dir -->
+          <div class="field">
+            <label>Директория вывода образа
+              <span class="field-hint">Куда сохранить .img файл.
+                По умолчанию: корень проекта</span>
+            </label>
+            <input x-model="profile.paths.image_output_dir"
+              @input.debounce.600ms="statPath('image_output_dir', profile.paths.image_output_dir)"
+              placeholder="/mnt/images  (пусто = корень проекта)">
+            <div x-show="profile.paths.image_output_dir && pathStats.image_output_dir"
+              class="path-hint" :class="pathHintClass('image_output_dir')"
+              x-text="pathHint('image_output_dir')"></div>
+          </div>
+
+          <!-- Image filename -->
+          <div class="field">
+            <label>Имя файла образа
+              <span class="field-hint">Например: <code>myos-v2.img</code>.
+                По умолчанию: из target (<span x-text="targets[profile.target]?.image_name || '—'"></span>)</span>
+            </label>
+            <input x-model="profile.paths.image_filename"
+              placeholder="netos-custom.img  (пусто = по умолчанию)"
+              pattern="^[^/\\]+\.img$">
+            <div x-show="profile.paths.image_filename"
+              style="font-size:11px;margin-top:3px"
+              :class="profile.paths.image_filename.match(/^[^\/\\]+\.img$/) ? 'hint-ok' : 'hint-err'"
+              x-text="profile.paths.image_filename.match(/^[^\/\\]+\.img$/)
+                ? '✓ ' + (profile.paths.image_output_dir || '&lt;project&gt;') + '/' + profile.paths.image_filename
+                : '✗ имя файла не должно содержать / и должно заканчиваться на .img'">
+            </div>
+          </div>
+
+        </div>
+      </section>
     </div>
 
     <!-- ── Step 2: Target ──────────────────────────────────────── -->
@@ -756,6 +824,7 @@ function app() {
     artifactMsg: '',
     evictForm: { dir:'all', max_entries:'', max_age_days:'', max_size_mb:'', dry_run:false },
     evicting: false,
+    pathStats: {},
     showDefconfig: false,
     defconfigText: '',
     defconfigLoading: false,
@@ -1021,6 +1090,30 @@ function app() {
       if (!iso) return ''
       const d = new Date(iso)
       return d.toLocaleDateString('ru-RU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+    },
+
+    async statPath(field, value) {
+      if (!value || !value.trim()) { this.pathStats[field] = null; return }
+      try {
+        const r = await fetch(`/api/fs/stat?path=${encodeURIComponent(value.trim())}`)
+        this.pathStats = { ...this.pathStats, [field]: await r.json() }
+      } catch { this.pathStats = { ...this.pathStats, [field]: null } }
+    },
+
+    pathHint(field) {
+      const s = this.pathStats[field]
+      if (!s) return ''
+      if (!s.exists) return `⚠ не существует${s.writable ? ' (будет создана)' : ''}`
+      if (!s.is_dir) return '✗ это файл, нужна директория'
+      return `✓ ${s.free_gb != null ? s.free_gb + ' GB свободно' : 'существует'}${s.writable ? '' : ' (нет прав записи!)'}`
+    },
+
+    pathHintClass(field) {
+      const s = this.pathStats[field]
+      if (!s) return ''
+      if (!s.exists) return 'hint-warn'
+      if (!s.is_dir || !s.writable) return 'hint-err'
+      return 'hint-ok'
     },
 
     async previewDefconfig() {
