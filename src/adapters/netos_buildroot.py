@@ -53,11 +53,13 @@ class NetOSBuildrootBuilder:
         target: TargetConfig,
         extra_packages: "list[str] | tuple[str, ...] | None" = None,
         cache_policy: str = "",
+        extra_groups: "list[str] | tuple[str, ...] | None" = None,
     ):
         self.rootfs_path = Path(rootfs_path)
         self.temp_path = Path(temp_path)
         self.target = target
         self.extra_packages: list[str] = list(extra_packages) if extra_packages else []
+        self.extra_groups: list[str] = list(extra_groups) if extra_groups else []
         # cache_policy: explicit arg > env var > default "use"
         self.cache_policy = (
             cache_policy
@@ -232,95 +234,46 @@ fi
 """
 
     def _defconfig(self) -> str:
-        package_lines = [
-            "BR2_PACKAGE_BUSYBOX=y",
-            "BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y",
-            "BR2_PACKAGE_BASH=y",
-            "BR2_PACKAGE_CA_CERTIFICATES=y",
-            "BR2_PACKAGE_GIT=y",
-            "BR2_PACKAGE_LIBCURL=y",
-            "BR2_PACKAGE_LIBCURL_CURL=y",
-            "BR2_PACKAGE_LIBCURL_OPENSSL=y",
-            "BR2_PACKAGE_IPROUTE2=y",
-            "BR2_PACKAGE_IPSET=y",
-            "BR2_PACKAGE_NFTABLES=y",
-            "BR2_PACKAGE_NFTABLES_JSON=y",
-            "BR2_PACKAGE_CONNTRACK_TOOLS=y",
-            "BR2_PACKAGE_WIREGUARD_TOOLS=y",
-            "BR2_PACKAGE_DNSMASQ=y",
-            "BR2_PACKAGE_VNSTAT=y",
-            "BR2_PACKAGE_TCPDUMP=y",
-            "BR2_PACKAGE_IFTOP=y",
-            "BR2_PACKAGE_NETHOGS=y",
-            "BR2_PACKAGE_SYSSTAT=y",
-            "BR2_PACKAGE_ETHTOOL=y",
-            "BR2_PACKAGE_BIND=y",
-            "BR2_PACKAGE_BIND_TOOLS=y",
-            "BR2_PACKAGE_UTIL_LINUX=y",
-            "BR2_PACKAGE_UTIL_LINUX_BINARIES=y",
-            "BR2_PACKAGE_UTIL_LINUX_AGETTY=y",
-            "BR2_PACKAGE_UTIL_LINUX_MOUNT=y",
-            "BR2_PACKAGE_UTIL_LINUX_MOUNTPOINT=y",
-            "BR2_PACKAGE_UTIL_LINUX_LOSETUP=y",
-            "BR2_PACKAGE_E2FSPROGS=y",
-            "BR2_PACKAGE_E2FSPROGS_FSCK=y",
-            "BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y",
-            "BR2_PACKAGE_KMOD=y",
-            "BR2_PACKAGE_KMOD_TOOLS=y",
-            "BR2_PACKAGE_DROPBEAR=y",
-            "BR2_PACKAGE_PYTHON3=y",
-            "BR2_PACKAGE_PYTHON3_SSL=y",
-            "BR2_PACKAGE_PYTHON3_ZLIB=y",
-            "BR2_PACKAGE_PYTHON3_PYEXPAT=y",
-            "BR2_PACKAGE_PYTHON3_READLINE=y",
-            "BR2_PACKAGE_PYTHON3_SQLITE=y",
-            "BR2_PACKAGE_PYTHON_PIP=y",
-            "BR2_PACKAGE_PYTHON_ALEMBIC=y",
-            "BR2_PACKAGE_PYTHON_AIOSQLITE=y",
-            "BR2_PACKAGE_PYTHON_ASYNCSSH=y",
-            "BR2_PACKAGE_PYTHON_BCRYPT=y",
-            "BR2_PACKAGE_PYTHON_BOTO3=y",
-            "BR2_PACKAGE_PYTHON_CRYPTOGRAPHY=y",
-            "BR2_PACKAGE_PYTHON_DATEUTIL=y",
-            "BR2_PACKAGE_PYTHON_DJANGO=y",
-            "BR2_PACKAGE_PYTHON_DOTENV=y",
-            "BR2_PACKAGE_PYTHON_FASTAPI=y",
-            "BR2_PACKAGE_PYTHON_GUNICORN=y",
-            "BR2_PACKAGE_PYTHON_HTTPX=y",
-            "BR2_PACKAGE_PYTHON_ITSDANGEROUS=y",
-            "BR2_PACKAGE_PYTHON_JINJA2=y",
-            "BR2_PACKAGE_PYTHON_PACKAGING=y",
-            "BR2_PACKAGE_PYTHON_PASSLIB=y",
-            "BR2_PACKAGE_PYTHON_PYDANTIC=y",
-            "BR2_PACKAGE_PYTHON_PYJWT=y",
-            "BR2_PACKAGE_PYTHON_PYYAML=y",
-            "BR2_PACKAGE_PYTHON_REQUESTS=y",
-            "BR2_PACKAGE_PYTHON_SQLALCHEMY=y",
-            "BR2_PACKAGE_PYTHON_STARLETTE=y",
-            "BR2_PACKAGE_PYTHON_UVICORN=y",
-            "BR2_PACKAGE_OPENVSWITCH=y",
-            "BR2_PACKAGE_OPEN_ISCSI=y",
-            "BR2_PACKAGE_SOCAT=y",
-            "BR2_TARGET_ROOTFS_TAR=y",
-            "BR2_TARGET_ROOTFS_TAR_NONE=y",
-        ]
+        from netos_build.catalog import PackageCatalog, DEFAULT_GROUPS
+        catalog = PackageCatalog.load()
 
-        package_lines.extend(self.target.buildroot_package_lines)
+        # Base packages from catalog default groups
+        package_lines: list[str] = catalog.resolve_groups(list(DEFAULT_GROUPS))
 
-        if self.extra_packages:
-            package_lines.extend(self.extra_packages)
+        # Extra groups requested via --groups CLI flag (stored in extra_groups)
+        if self.extra_groups:
+            unknown = [g for g in self.extra_groups if not catalog.has_group(g)]
+            if unknown:
+                raise ValueError(
+                    f"Unknown package group(s): {', '.join(unknown)}. "
+                    f"Available: {', '.join(catalog.group_names())}"
+                )
+            extras = catalog.resolve_groups(list(self.extra_groups))
+            for pkg in extras:
+                if pkg not in package_lines:
+                    package_lines.append(pkg)
+
+        # Target-specific packages (e.g. wireless for zero2w)
+        for pkg in self.target.buildroot_package_lines:
+            if pkg not in package_lines:
+                package_lines.append(pkg)
+
+        # Extra raw BR2_PACKAGE_*=y lines from --packages-file or API callers
+        for pkg in self.extra_packages:
+            if pkg not in package_lines:
+                package_lines.append(pkg)
 
         if self.target.name == "pi5" and os.environ.get("NETOS_INCLUDE_QEMU", "0") == "1":
-            package_lines.extend(
-                [
-                    "BR2_PACKAGE_QEMU=y",
-                    "BR2_PACKAGE_QEMU_SYSTEM=y",
-                    "BR2_PACKAGE_QEMU_SYSTEM_KVM=y",
-                    "BR2_PACKAGE_QEMU_SYSTEM_TCG=y",
-                    "BR2_PACKAGE_QEMU_CHOOSE_TARGETS=y",
-                    "BR2_PACKAGE_QEMU_TARGET_AARCH64=y",
-                ]
-            )
+            for pkg in [
+                "BR2_PACKAGE_QEMU=y",
+                "BR2_PACKAGE_QEMU_SYSTEM=y",
+                "BR2_PACKAGE_QEMU_SYSTEM_KVM=y",
+                "BR2_PACKAGE_QEMU_SYSTEM_TCG=y",
+                "BR2_PACKAGE_QEMU_CHOOSE_TARGETS=y",
+                "BR2_PACKAGE_QEMU_TARGET_AARCH64=y",
+            ]:
+                if pkg not in package_lines:
+                    package_lines.append(pkg)
 
         br2_arch = f"BR2_{self.target.buildroot_arch}=y"
         return "\n".join(
