@@ -48,6 +48,16 @@ def build_parser():
         dest="packages_file",
         help="Path to a text file with extra BR2_PACKAGE_*=y lines.",
     )
+    parser.add_argument(
+        "--groups",
+        default=None,
+        dest="groups",
+        help=(
+            "Comma-separated extra catalog group names to include "
+            "(e.g. --groups wireless,monitoring). "
+            "See src/packages/catalog.yaml for available groups."
+        ),
+    )
     return parser
 
 
@@ -168,6 +178,10 @@ if __name__ == "__main__":
     if args.packages_file:
         extra_packages = _load_extra_packages(args.packages_file)
 
+    extra_groups: list[str] = []
+    if args.groups:
+        extra_groups = [g.strip() for g in args.groups.split(",") if g.strip()]
+
     # Build plan — central model for this build
     cache_policy = os.environ.get("NETOS_CACHE_POLICY", "use")
     plan = ResolvedBuildPlan.from_target(target, extra_packages=extra_packages, cache_policy=cache_policy)
@@ -223,6 +237,7 @@ if __name__ == "__main__":
         ROOTFS_PATH, TEMP_PATH, target,
         extra_packages=extra_packages,
         cache_policy=plan.cache_policy,
+        extra_groups=extra_groups,
     ).bootstrap()
 
     # Настройка контейнера
