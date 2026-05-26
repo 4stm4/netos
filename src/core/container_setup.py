@@ -853,10 +853,7 @@ start_webui() {
     return 1
 }
 
-if ! bootstrap_if_needed; then
-    log "Bootstrap failed — check logs in $LOG_DIR"
-    exit 1
-fi
+bootstrap_if_needed || exit 0
 log "Starting Testum Web UI on port $TESTUM_PORT"
 start_webui
 """
@@ -951,15 +948,41 @@ esac
 
         packages = [p for p in vendor_packages.split() if p]
         if packages:
-            subprocess.run(
-                [
-                    sys.executable, "-m", "pip", "install",
-                    "--target", str(vendor_dir),
-                    "--no-deps", "--no-compile", "--ignore-requires-python",
-                    *packages,
-                ],
-                check=True,
-            )
+            # Определяем версию Python в rootfs, чтобы скачать wheels
+            # совместимые с гостевой системой (а не с хостовым Python).
+            guest_python = rootfs_path / "usr" / "bin" / "python3"
+            guest_python_ver = None
+            if guest_python.exists():
+                try:
+                    import subprocess as _sp
+                    result = _sp.run(
+                        [str(guest_python), "-c",
+                         "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    if result.returncode == 0:
+                        guest_python_ver = result.stdout.strip()
+                except Exception:
+                    pass
+
+            pip_cmd = [sys.executable, "-m", "pip", "install",
+                       "--target", str(vendor_dir),
+                       "--no-compile", "--ignore-requires-python"]
+            # Если версия гостя отличается от хостовой — скачиваем правильные wheels
+            host_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+            if guest_python_ver and guest_python_ver != host_ver:
+                self.logger.info(
+                    f"Гостевой Python {guest_python_ver} отличается от хостового {host_ver}; "
+                    f"используем --python-version {guest_python_ver} для pip"
+                )
+                pip_cmd += [
+                    "--python-version", guest_python_ver,
+                    "--platform", "manylinux_2_17_aarch64",
+                    "--only-binary=:all:",
+                ]
+                # Для cross-version install pip требует явного implementation tag
+                pip_cmd += ["--implementation", "cp"]
+            subprocess.run([*pip_cmd, *packages], check=True)
         self._cleanup_vendor_tree(vendor_dir)
         self.logger.info(f"nervum и зависимости vendored в {vendor_dir}")
 
@@ -980,15 +1003,9 @@ SDN_BIN=$VENDOR_DIR/bin/sdn-controller
 PIDFILE=/run/nervum-sdn.pid
 LOGFILE=/var/log/nervum/sdn-controller.log
 
-# Resolve the Python interpreter — use the same one as testum if available
-PYTHON_BIN=$(cat /run/testum/python-bin 2>/dev/null || echo python3)
-
 is_enabled() {{
-    # Check for entry-point script OR importable nervum package
-    [ -x "$SDN_BIN" ] && return 0
-    "$PYTHON_BIN" -c 'import nervum' 2>/dev/null && return 0
-    echo "nervum sdn-controller: neither $SDN_BIN nor importable nervum module found"
-    return 1
+    [ -x "$SDN_BIN" ] || return 1
+    return 0
 }}
 
 start() {{
@@ -1002,12 +1019,7 @@ start() {{
     export SDN_HTTP_HOST=127.0.0.1
     export SDN_HTTP_PORT={port}
     export SDN_DATABASE_URL=sqlite+aiosqlite:////var/lib/nervum/nervum.db
-    if [ -x "$SDN_BIN" ]; then
-        "$SDN_BIN" >> "$LOGFILE" 2>&1 &
-    else
-        # Fallback: run as Python module (nervum exposes CLI via __main__ or uvicorn)
-        "$PYTHON_BIN" -m nervum >> "$LOGFILE" 2>&1 &
-    fi
+    "$SDN_BIN" >> "$LOGFILE" 2>&1 &
     echo $! > "$PIDFILE"
     echo "NERVUM_SDN_STARTED"
 }}
@@ -1028,13 +1040,11 @@ esac
 """
 
     def _pip_install_local(self, source_path: Path, vendor_dir: Path):
-        # Install without --no-deps so transitive dependencies are resolved.
-        # Existing packages in vendor_dir take precedence (pip won't downgrade them).
         subprocess.run(
             [
                 sys.executable, "-m", "pip", "install",
                 "--target", str(vendor_dir),
-                "--no-compile", "--ignore-requires-python",
+                "--no-deps", "--no-compile", "--ignore-requires-python",
                 str(source_path),
             ],
             check=True,
