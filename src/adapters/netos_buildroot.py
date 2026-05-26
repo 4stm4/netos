@@ -392,11 +392,24 @@ fi
             cache_policy=self.cache_policy,
         )
 
+    def _cache_sync(self):
+        """Return a CacheSync instance configured from environment variables.
+
+        Returns None when no remote store is configured (LocalStore).
+        """
+        from netos_build.store_factory import StoreFactory
+        from netos_build.cache_sync import CacheSync
+        store = StoreFactory.from_env()
+        if store.is_local:
+            return None
+        return CacheSync(store, push_enabled=StoreFactory.push_enabled())
+
     def _restore_toolchain_cache(self) -> None:
         """Try to restore a pre-built toolchain from cache.
 
         Called after defconfig and before ``make`` so Buildroot sees the
         existing stamps and skips the ~45-min GCC build.
+        Order: remote pull (M7) → local cache hit → local restore.
         """
         if self.cache_policy == "rebuild":
             logging.info("cache_policy=rebuild — skipping toolchain cache restore")
@@ -406,6 +419,12 @@ fi
         plan     = self._build_plan()
         tc_cache = ToolchainCache(self.temp_path / "cache")
         key      = tc_cache.cache_key(plan, BUILDROOT_VERSION)
+        archive  = tc_cache.archive_path(plan, BUILDROOT_VERSION)
+
+        # M7: try to pull from remote store into local cache before checking has()
+        sync = self._cache_sync()
+        if sync:
+            sync.pull(archive.name, archive)
 
         if tc_cache.has(plan, BUILDROOT_VERSION):
             logging.info("Toolchain cache hit: %s", key)
@@ -420,6 +439,7 @@ fi
 
         Non-fatal: if packing fails the build is still considered successful.
         Skipped if the cache already has an entry for this key.
+        After local pack, pushes to remote store (M7).
         """
         if self.cache_policy == "rebuild":
             return
@@ -430,6 +450,11 @@ fi
 
         if tc_cache.has(plan, BUILDROOT_VERSION):
             logging.info("Toolchain already cached — skipping pack")
+            # Still push to remote in case it's missing there
+            sync = self._cache_sync()
+            if sync:
+                archive = tc_cache.archive_path(plan, BUILDROOT_VERSION)
+                sync.push(archive.name, archive)
             return
 
         # Verify that GCC was actually compiled into host/
@@ -442,7 +467,11 @@ fi
             return
 
         try:
-            tc_cache.pack(plan, BUILDROOT_VERSION, self.output_dir)
+            dest = tc_cache.pack(plan, BUILDROOT_VERSION, self.output_dir)
+            # M7: push new archive to remote store
+            sync = self._cache_sync()
+            if sync:
+                sync.push(dest.name, dest)
         except Exception as exc:
             logging.error(
                 "Failed to pack toolchain to cache (non-fatal): %s", exc
@@ -459,6 +488,7 @@ fi
         the expensive package-compilation step is skipped entirely when the
         package set hasn't changed.
 
+        Order: remote pull (M7) → local cache hit → local restore.
         Returns True if rootfs.tar was successfully restored (caller must
         skip _build_rootfs).  Returns False on cache miss or restore failure.
         """
@@ -470,6 +500,12 @@ fi
         plan      = self._build_plan()
         rc_cache  = RootfsCache(self.temp_path / "cache")
         key       = rc_cache.cache_key(plan, BUILDROOT_VERSION)
+        archive   = rc_cache.archive_path(plan, BUILDROOT_VERSION)
+
+        # M7: pull from remote store into local cache before checking has()
+        sync = self._cache_sync()
+        if sync:
+            sync.pull(archive.name, archive)
 
         if rc_cache.has(plan, BUILDROOT_VERSION):
             logging.info("Rootfs cache hit: %s", key)
@@ -488,6 +524,7 @@ fi
         Non-fatal: if packing fails the build is still considered successful.
         Skipped if the cache already has an entry for this key, or if
         cache_policy == "rebuild".
+        After local pack, pushes to remote store (M7).
         """
         if self.cache_policy == "rebuild":
             return
@@ -499,6 +536,11 @@ fi
         if rc_cache.has(plan, BUILDROOT_VERSION):
             if self.cache_policy != "refresh":
                 logging.info("Rootfs already cached — skipping pack")
+                # Still push to remote in case it's missing there
+                sync = self._cache_sync()
+                if sync:
+                    archive = rc_cache.archive_path(plan, BUILDROOT_VERSION)
+                    sync.push(archive.name, archive)
                 return
 
         rootfs_tar = self.output_dir / "images" / "rootfs.tar"
@@ -507,7 +549,11 @@ fi
             return
 
         try:
-            rc_cache.pack(plan, BUILDROOT_VERSION, self.output_dir)
+            dest = rc_cache.pack(plan, BUILDROOT_VERSION, self.output_dir)
+            # M7: push new archive to remote store
+            sync = self._cache_sync()
+            if sync:
+                sync.push(dest.name, dest)
         except Exception as exc:
             logging.error(
                 "Failed to pack rootfs to cache (non-fatal): %s", exc
