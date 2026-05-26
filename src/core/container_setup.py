@@ -853,7 +853,10 @@ start_webui() {
     return 1
 }
 
-bootstrap_if_needed || exit 0
+if ! bootstrap_if_needed; then
+    log "Bootstrap failed — check logs in $LOG_DIR"
+    exit 1
+fi
 log "Starting Testum Web UI on port $TESTUM_PORT"
 start_webui
 """
@@ -966,9 +969,15 @@ SDN_BIN=$VENDOR_DIR/bin/sdn-controller
 PIDFILE=/run/nervum-sdn.pid
 LOGFILE=/var/log/nervum/sdn-controller.log
 
+# Resolve the Python interpreter — use the same one as testum if available
+PYTHON_BIN=$(cat /run/testum/python-bin 2>/dev/null || echo python3)
+
 is_enabled() {{
-    [ -x "$SDN_BIN" ] || return 1
-    return 0
+    # Check for entry-point script OR importable nervum package
+    [ -x "$SDN_BIN" ] && return 0
+    "$PYTHON_BIN" -c 'import nervum' 2>/dev/null && return 0
+    echo "nervum sdn-controller: neither $SDN_BIN nor importable nervum module found"
+    return 1
 }}
 
 start() {{
@@ -982,7 +991,12 @@ start() {{
     export SDN_HTTP_HOST=127.0.0.1
     export SDN_HTTP_PORT={port}
     export SDN_DATABASE_URL=sqlite+aiosqlite:////var/lib/nervum/nervum.db
-    "$SDN_BIN" >> "$LOGFILE" 2>&1 &
+    if [ -x "$SDN_BIN" ]; then
+        "$SDN_BIN" >> "$LOGFILE" 2>&1 &
+    else
+        # Fallback: run as Python module (nervum exposes CLI via __main__ or uvicorn)
+        "$PYTHON_BIN" -m nervum >> "$LOGFILE" 2>&1 &
+    fi
     echo $! > "$PIDFILE"
     echo "NERVUM_SDN_STARTED"
 }}
@@ -1003,11 +1017,13 @@ esac
 """
 
     def _pip_install_local(self, source_path: Path, vendor_dir: Path):
+        # Install without --no-deps so transitive dependencies are resolved.
+        # Existing packages in vendor_dir take precedence (pip won't downgrade them).
         subprocess.run(
             [
                 sys.executable, "-m", "pip", "install",
                 "--target", str(vendor_dir),
-                "--no-deps", "--no-compile", "--ignore-requires-python",
+                "--no-compile", "--ignore-requires-python",
                 str(source_path),
             ],
             check=True,
