@@ -472,6 +472,9 @@ fi
             sync = self._cache_sync()
             if sync:
                 sync.push(dest.name, dest)
+            # Evict old toolchain archives if policy is configured
+            from netos_build.cache_eviction import evict_from_env
+            evict_from_env(tc_cache.cache_dir)
         except Exception as exc:
             logging.error(
                 "Failed to pack toolchain to cache (non-fatal): %s", exc
@@ -554,6 +557,9 @@ fi
             sync = self._cache_sync()
             if sync:
                 sync.push(dest.name, dest)
+            # Evict old rootfs archives if policy is configured
+            from netos_build.cache_eviction import evict_from_env
+            evict_from_env(rc_cache.cache_dir)
         except Exception as exc:
             logging.error(
                 "Failed to pack rootfs to cache (non-fatal): %s", exc
