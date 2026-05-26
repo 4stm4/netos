@@ -124,11 +124,17 @@ def get_cache_status(target: str) -> dict[str, Any]:
     )
 
     # Stale detection
-    # Смотрим наличие stamp-директорий toolchain: если их нет — toolchain не собирался,
-    # это нормальное состояние. Чистка нужна только когда stamps есть, но g++ отсутствует.
-    _TC_STAMP_DIRS = ["toolchain-buildroot", "toolchain-buildroot-aux", "toolchain-buildroot-initial"]
-    tc_stamps_exist = out_exists and any(
-        (out_dir / "build" / d).exists() for d in _TC_STAMP_DIRS
+    # Смотрим наличие stamp-файлов gcc-final (.stamp_built) и виртуальных пакетов.
+    # Если built-стамп gcc-final есть, но g++ отсутствует — нужна чистка toolchain.
+    import glob as _glob
+    _TC_VIRTUAL_DIRS = ["toolchain-buildroot", "toolchain-buildroot-aux", "toolchain-buildroot-initial"]
+    _gcc_final_built = bool(out_exists and any(
+        Path(p).exists()
+        for p in _glob.glob(str(out_dir / "build" / "host-gcc-final-*" / ".stamp_built"))
+    ))
+    tc_stamps_exist = out_exists and (
+        _gcc_final_built or
+        any((out_dir / "build" / d).exists() for d in _TC_VIRTUAL_DIRS)
     )
     current_hash = _compute_defconfig_hash(target)
     saved_hash   = _saved_hash(out_dir)
@@ -198,18 +204,32 @@ def clean_cache(target: str, req: CleanRequest) -> dict[str, Any]:
     if req.mode == "toolchain":
         if out_dir.exists():
             prefix  = _toolchain_cross_prefix(target)
-            # Удаляем стампы toolchain (размер не считаем — du слишком долго)
+            build_dir = out_dir / "build"
+
+            # 1. Виртуальные пакеты toolchain-buildroot (зависимости gcc-final)
             for d in ["toolchain-buildroot", "toolchain-buildroot-aux", "toolchain-buildroot-initial"]:
-                stamp_dir = out_dir / "build" / d
+                stamp_dir = build_dir / d
                 if stamp_dir.exists():
                     shutil.rmtree(stamp_dir)
-            # Удаляем g++ и c++ из host/bin чтобы Buildroot понял что надо пересобрать
+
+            # 2. host-gcc-final — именно здесь компилируется g++.
+            #    Удаляем стампы built/configured/host_installed чтобы Buildroot
+            #    пересконфигурировал GCC с --enable-languages=c,c++ и пересобрал.
+            import glob as _glob
+            for gcc_dir in _glob.glob(str(build_dir / "host-gcc-final-*")):
+                for stamp in ["built", "configured", "host_installed", "installed",
+                              "staging_installed", "target_installed"]:
+                    p = Path(gcc_dir) / f".stamp_{stamp}"
+                    if p.exists():
+                        p.unlink()
+
+            # 3. Удаляем g++ и c++ из host/bin
             for suffix in ["-g++", "-c++"]:
                 b = out_dir / "host" / "bin" / f"{prefix}{suffix}"
                 if b.exists():
-                    freed_gb += round(b.stat().st_size / 1024**3, 4)
                     b.unlink()
-            # Удаляем сохранённый хэш чтобы после пересборки записался новый
+
+            # 4. Удаляем сохранённый хэш конфига
             hash_file = out_dir / _HASH_FILE
             if hash_file.exists():
                 hash_file.unlink()
