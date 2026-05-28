@@ -49,6 +49,38 @@
 
     <!-- ── Step 1: Среда (Preflight) ──────────────────────────── -->
     <div class="step-body step-sections" x-show="step === 1">
+
+      <!-- Шаблоны профилей -->
+      <section x-show="presets.length > 0">
+        <div class="section-label">Шаблон
+          <span style="font-weight:400;color:var(--muted);margin-left:6px">— выберите стартовую конфигурацию</span>
+        </div>
+        <div class="profile-preset-grid">
+          <template x-for="p in presets" :key="p.id">
+            <button class="profile-preset-card"
+                    :class="{ active: selectedProfilePreset === p.id }"
+                    @click="applyProfilePreset(p)">
+              <div class="ppc-header">
+                <span class="ppc-icon" x-text="p.icon"></span>
+                <span class="ppc-name" x-text="p.name"></span>
+                <span class="ppc-check" x-show="selectedProfilePreset === p.id">✓</span>
+              </div>
+              <div class="ppc-desc" x-text="p.description"></div>
+              <div class="ppc-meta">
+                <span x-text="'~' + p.estimated_size_mb + ' МБ'"></span>
+                <span style="color:var(--muted)">·</span>
+                <span x-text="'~' + p.estimated_build_min + ' мин'"></span>
+              </div>
+              <div class="ppc-tags">
+                <template x-for="tag in p.tags" :key="tag">
+                  <span class="ppc-tag" x-text="tag"></span>
+                </template>
+              </div>
+            </button>
+          </template>
+        </div>
+      </section>
+
       <section>
         <div class="section-label">Состояние кэша сборки —
           <span x-text="profile.target" style="font-weight:600"></span>
@@ -828,18 +860,22 @@ function app() {
     showDefconfig: false,
     defconfigText: '',
     defconfigLoading: false,
+    presets: [],
+    selectedProfilePreset: null,
 
     async init() {
-      const [t, p, d, pr] = await Promise.all([
+      const [t, p, d, pr, ps] = await Promise.all([
         fetch('/api/targets').then(r=>r.json()),
         fetch('/api/packages').then(r=>r.json()),
         fetch('/api/defaults').then(r=>r.json()),
         fetch('/api/profiles').then(r=>r.json()),
+        fetch('/api/presets').then(r=>r.json()),
       ])
       this.targets   = t
       this.catalogue = p
       this.defaultKeys = d.keys
       this.profiles  = pr
+      this.presets   = ps
       this.refreshCache()
       this.refreshArtifactCache()
     },
@@ -896,6 +932,36 @@ function app() {
         this.profile.image.size_mb = p.size_mb
         this.profile.image.boot_mb = p.boot_mb
       }
+    },
+
+    applyProfilePreset(preset) {
+      this.selectedProfilePreset = preset.id
+      const src = preset.profile
+      // deep merge: target
+      if (src.target) this.profile.target = src.target
+      // branding
+      if (src.branding) Object.assign(this.profile.branding, src.branding)
+      // image
+      if (src.image) {
+        if (src.image.size_mb) this.profile.image.size_mb = src.image.size_mb
+        if (src.image.boot_mb !== undefined) this.profile.image.boot_mb = src.image.boot_mb
+      }
+      // packages
+      if (src.packages) {
+        if (src.packages.enabled !== undefined) this.profile.packages.enabled = [...src.packages.enabled]
+        if (src.packages.custom  !== undefined) this.profile.packages.custom  = [...src.packages.custom]
+      }
+      // nervum
+      if (src.nervum !== undefined) Object.assign(this.profile.nervum, src.nervum)
+      // webui
+      if (src.webui !== undefined) Object.assign(this.profile.webui, src.webui)
+      // suggest profile name
+      if (!this.profileName) this.profileName = preset.id
+      // sync size preset selector
+      const sp = this.sizePresets.find(p => p.size_mb === this.profile.image.size_mb && p.boot_mb === this.profile.image.boot_mb)
+      this.selectedPreset = sp ? sp.id : 'custom'
+      // refresh cache for new target
+      this.refreshCache()
     },
 
     targetProps() {

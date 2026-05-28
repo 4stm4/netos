@@ -134,3 +134,9 @@ groups:
     packages:
       - BR2_TARGET_ROOTFS_TAR=y
       - BR2_TARGET_ROOTFS_TAR_NONE=y
+
+  rootfs-initramfs:
+    description: "initramfs rootfs (cpio.gz) — для минимальных QEMU-образов и быстрых тестов"
+    packages:
+      - BR2_TARGET_ROOTFS_CPIO=y
+      - BR2_TARGET_ROOTFS_CPIO_GZ=y
