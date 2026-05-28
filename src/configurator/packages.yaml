@@ -493,3 +493,19 @@ categories:
         name: python-itsdangerous
         description: "Cryptographic signing"
         size_kb: 100
+  - id: mininet
+    name: "Mininet / Network"
+    packages:
+      - key: BR2_PACKAGE_MININET
+        name: mininet
+        description: "netos network configurator — interface/address/DHCP from config.startup"
+        size_kb: 50
+        required: false
+      - key: BR2_PACKAGE_DNSMASQ
+        name: dnsmasq
+        description: "Lightweight DHCP+DNS server (pulled in by mininet)"
+        size_kb: 600
+      - key: BR2_PACKAGE_IPROUTE2
+        name: iproute2
+        description: "ip / ss / tc — modern Linux networking tools"
+        size_kb: 2500

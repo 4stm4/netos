@@ -126,13 +126,14 @@ class NetOSBuildrootBuilder:
         if self.external_dir.exists():
             shutil.rmtree(self.external_dir)
 
-        package_dir = self.external_dir / "package" / "openvswitch"
-        board_dir = self.external_dir / "board" / "4stm4" / "netos"
-        overlay_dir = board_dir / "rootfs_overlay"
-        configs_dir = self.external_dir / "configs"
-        package_dir.mkdir(parents=True)
-        overlay_dir.mkdir(parents=True)
-        configs_dir.mkdir(parents=True)
+        ovs_dir      = self.external_dir / "package" / "openvswitch"
+        mininet_dir  = self.external_dir / "package" / "mininet"
+        board_dir    = self.external_dir / "board" / "4stm4" / "netos"
+        overlay_dir  = board_dir / "rootfs_overlay"
+        configs_dir  = self.external_dir / "configs"
+
+        for d in (ovs_dir, mininet_dir, overlay_dir, configs_dir):
+            d.mkdir(parents=True)
 
         (self.external_dir / "external.desc").write_text(
             "name: NETOS\n"
@@ -140,14 +141,26 @@ class NetOSBuildrootBuilder:
         )
         (self.external_dir / "Config.in").write_text(
             'source "$BR2_EXTERNAL_NETOS_PATH/package/openvswitch/Config.in"\n'
+            'source "$BR2_EXTERNAL_NETOS_PATH/package/mininet/Config.in"\n'
         )
         (self.external_dir / "external.mk").write_text(
             "include $(sort $(wildcard $(BR2_EXTERNAL_NETOS_PATH)/package/*/*.mk))\n"
         )
 
-        (package_dir / "Config.in").write_text(self._openvswitch_config_in())
-        (package_dir / "openvswitch.mk").write_text(self._openvswitch_mk())
-        (package_dir / "openvswitch.hash").write_text(self._openvswitch_hash())
+        # openvswitch package
+        (ovs_dir / "Config.in").write_text(self._openvswitch_config_in())
+        (ovs_dir / "openvswitch.mk").write_text(self._openvswitch_mk())
+        (ovs_dir / "openvswitch.hash").write_text(self._openvswitch_hash())
+
+        # mininet package — shell-script package, local source in external tree
+        (mininet_dir / "Config.in").write_text(self._mininet_config_in())
+        (mininet_dir / "mininet.mk").write_text(self._mininet_mk())
+        # Script files that mininet.mk will install into the rootfs
+        (mininet_dir / "mininet").write_text(self._mininet_script())
+        (mininet_dir / "mininet").chmod(0o755)
+        (mininet_dir / "S99mininet").write_text(self._mininet_init_script())
+        (mininet_dir / "S99mininet").chmod(0o755)
+        (mininet_dir / "config.startup").write_text(self._mininet_default_config())
 
         self._write_overlay(overlay_dir)
         post_build = board_dir / "post-build.sh"
@@ -209,6 +222,244 @@ $(eval $(autotools-package))
         return f"""# Locally calculated
 sha256  {OPENVSWITCH_SHA256}  openvswitch-{OPENVSWITCH_VERSION}.tar.gz
 sha256  {OPENVSWITCH_LICENSE_SHA256}  LICENSE
+"""
+
+    # ------------------------------------------------------------------
+    # Mininet package generators
+    # ------------------------------------------------------------------
+
+    def _mininet_config_in(self) -> str:
+        return """\
+config BR2_PACKAGE_MININET
+\tbool "mininet"
+\tdepends on BR2_USE_MMU
+\tselect BR2_PACKAGE_IPROUTE2
+\tselect BR2_PACKAGE_DNSMASQ
+\thelp
+\t  Minimal network configurator for netos/QEMU images.
+\t  Reads /etc/mininet/config.startup at boot, configures
+\t  interfaces with iproute2, and starts dnsmasq as a DHCP
+\t  server for each interface that has a dhcp-range directive.
+\t
+\t  Installs:
+\t    /usr/sbin/mininet         — config applier + DHCP launcher
+\t    /etc/mininet/config.startup — startup configuration template
+\t    /etc/init.d/S99mininet    — BusyBox init script
+\t    /var/lib/mininet/         — persistent state directory
+"""
+
+    def _mininet_mk(self) -> str:
+        return """\
+################################################################################
+#
+# mininet — netos minimal network configurator
+#
+################################################################################
+
+MININET_VERSION       = 1.0
+MININET_SITE          = $(BR2_EXTERNAL_NETOS_PATH)/package/mininet
+MININET_SITE_METHOD   = local
+MININET_LICENSE       = MIT
+
+# No upstream source to configure or compile — pure shell-script package.
+MININET_CONFIGURE_CMDS =
+MININET_BUILD_CMDS     =
+
+define MININET_INSTALL_TARGET_CMDS
+\t$(INSTALL) -D -m 0755 $(@D)/mininet        $(TARGET_DIR)/usr/sbin/mininet
+\t$(INSTALL) -D -m 0755 $(@D)/S99mininet     $(TARGET_DIR)/etc/init.d/S99mininet
+\t$(INSTALL) -D -m 0644 $(@D)/config.startup $(TARGET_DIR)/etc/mininet/config.startup
+\tmkdir -p $(TARGET_DIR)/var/lib/mininet
+endef
+
+$(eval $(generic-package))
+"""
+
+    def _mininet_script(self) -> str:
+        return """\
+#!/bin/sh
+# /usr/sbin/mininet — netos network configurator
+#
+# Reads /etc/mininet/config.startup, configures interfaces via iproute2,
+# and starts dnsmasq for interfaces with a dhcp-range directive.
+#
+# Usage: mininet {start|stop|restart|status}
+set -e
+
+CFG=/etc/mininet/config.startup
+RUN=/run/mininet
+LOG=/var/log/mininet.log
+DNSMASQ_CONF=$RUN/dnsmasq.conf
+DNSMASQ_PID=$RUN/dnsmasq.pid
+DNSMASQ_LEASES=$RUN/dnsmasq.leases
+
+_log() { printf '[mininet] %s\\n' "$*" | tee -a "$LOG"; }
+
+_parse_and_apply() {
+    [ -f "$CFG" ] || { _log "no config at $CFG — nothing to do"; return 0; }
+    local iface=""
+    while IFS= read -r raw; do
+        # Strip comments and blank lines
+        local line="${raw%%#*}"
+        line="${line#"${line%%[! ]*}"}"
+        [ -z "$line" ] && continue
+
+        local key="${line%% *}"
+        local val="${line#"$key"}"
+        val="${val#"${val%%[! ]*}"}"   # ltrim val
+
+        case "$key" in
+            interface)
+                iface="$val"
+                _log "interface $iface: up"
+                ip link set "$iface" up 2>/dev/null || true
+                ;;
+            address)
+                _log "$iface: address $val"
+                ip addr replace "$val" dev "$iface" 2>/dev/null || true
+                ;;
+            gateway)
+                _log "default gateway $val"
+                ip route replace default via "$val" 2>/dev/null || true
+                ;;
+            dhcp-range)
+                # Syntax: <start>,<end>,<lease>  e.g. 10.0.0.10,10.0.0.100,12h
+                printf 'interface=%s\\ndhcp-range=%s\\n' "$iface" "$val" \
+                    >> "$DNSMASQ_CONF"
+                ;;
+            dns)
+                # Syntax: <ip> [<ip>...]  upstream resolvers forwarded by dnsmasq
+                for ns in $val; do
+                    printf 'server=%s\\n' "$ns" >> "$DNSMASQ_CONF"
+                done
+                ;;
+            route)
+                # Syntax: <dest/prefix> via <gw>
+                _log "route $val"
+                ip route replace $val 2>/dev/null || true
+                ;;
+        esac
+    done < "$CFG"
+}
+
+_start_dnsmasq() {
+    grep -q '^dhcp-range=' "$DNSMASQ_CONF" 2>/dev/null || return 0
+    _log "starting dnsmasq"
+    dnsmasq --conf-file="$DNSMASQ_CONF"
+}
+
+start() {
+    _log "starting mininet"
+    mkdir -p "$RUN" /var/lib/mininet
+    # Base dnsmasq config (overwritten on each start)
+    cat > "$DNSMASQ_CONF" <<CONF
+# Generated by mininet — do not edit manually
+pid-file=$DNSMASQ_PID
+dhcp-leasefile=$DNSMASQ_LEASES
+no-resolv
+no-hosts
+log-dhcp
+CONF
+    ip link set lo up 2>/dev/null || true
+    _parse_and_apply
+    _start_dnsmasq
+    _log "mininet ready"
+}
+
+stop() {
+    _log "stopping mininet"
+    if [ -f "$DNSMASQ_PID" ]; then
+        kill "$(cat "$DNSMASQ_PID")" 2>/dev/null || true
+        rm -f "$DNSMASQ_PID"
+    fi
+}
+
+status() {
+    if [ -f "$DNSMASQ_PID" ] && kill -0 "$(cat "$DNSMASQ_PID")" 2>/dev/null; then
+        echo "mininet: running  (dnsmasq pid=$(cat "$DNSMASQ_PID"))"
+        echo "config:  $CFG"
+        if command -v ip >/dev/null 2>&1; then
+            echo "--- interfaces ---"
+            ip -brief addr show
+            echo "--- routes ---"
+            ip route show
+        fi
+    else
+        echo "mininet: stopped"
+    fi
+}
+
+case "${1:-help}" in
+    start)   start   ;;
+    stop)    stop    ;;
+    restart) stop; start ;;
+    status)  status  ;;
+    *) echo "usage: mininet {start|stop|restart|status}"; exit 1 ;;
+esac
+"""
+
+    def _mininet_init_script(self) -> str:
+        return """\
+#!/bin/sh
+#
+# /etc/init.d/S99mininet — BusyBox init script for mininet
+# Applies /etc/mininet/config.startup and starts DHCP at boot.
+#
+
+case "$1" in
+    start)
+        printf 'Starting mininet: '
+        /usr/sbin/mininet start
+        echo "OK"
+        ;;
+    stop)
+        printf 'Stopping mininet: '
+        /usr/sbin/mininet stop
+        echo "OK"
+        ;;
+    restart|reload)
+        "$0" stop
+        "$0" start
+        ;;
+    status)
+        /usr/sbin/mininet status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+
+exit $?
+"""
+
+    def _mininet_default_config(self) -> str:
+        return """\
+# /etc/mininet/config.startup — netos network startup configuration
+#
+# Applied at boot by /etc/init.d/S99mininet.
+# Edit this file to configure interfaces, IP addresses, and DHCP pools.
+#
+# Directives (one per line, # = comment):
+#
+#   interface <name>               — select interface context for following lines
+#   address   <ip/prefix>          — assign IP address (e.g. 10.0.0.1/24)
+#   gateway   <ip>                 — default route (e.g. 10.0.0.254)
+#   dhcp-range <start>,<end>,<ttl> — enable DHCP server (e.g. 10.0.0.10,10.0.0.100,12h)
+#   dns       <ip> [<ip>...]       — upstream DNS servers forwarded by dnsmasq
+#   route     <dest/prefix> via <gw> — static route
+#
+# Example:
+#   interface eth0
+#   address   10.0.0.1/24
+#   dhcp-range 10.0.0.10,10.0.0.100,12h
+#   dns       8.8.8.8 8.8.4.4
+#
+# ── Default QEMU virtio-net configuration ──────────────────────────────────
+
+interface eth0
+address   10.0.0.1/24
+dhcp-range 10.0.0.10,10.0.0.200,12h
+dns       8.8.8.8
 """
 
     def _write_overlay(self, overlay_dir: Path):
@@ -401,11 +652,17 @@ fi
         """
         import hashlib as _hashlib
         parts = [
-            # external tree recipes
+            # openvswitch external package
             self._openvswitch_mk(),
             self._openvswitch_config_in(),
             self._openvswitch_hash(),
-            # post-build & overlay scripts (inline generators)
+            # mininet external package
+            self._mininet_mk(),
+            self._mininet_config_in(),
+            self._mininet_script(),
+            self._mininet_init_script(),
+            self._mininet_default_config(),
+            # post-build & overlay scripts
             self._post_build_script(),
             # branding constants baked into the image
             f"NETOS_VERSION={NETOS_VERSION}",
