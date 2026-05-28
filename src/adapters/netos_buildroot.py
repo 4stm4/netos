@@ -20,6 +20,15 @@ BUILDROOT_SHA256 = os.environ.get(
     "a2216fdc46b5e81e529acb9077324f7b4a9403366922f350bf7be67f46231b66",
 )
 
+NANODHCP_VERSION = os.environ.get(
+    "NETOS_NANODHCP_VERSION",
+    "26f545d605e7ebf3f19dbd0a95fdafc5a1e6c46c",
+)
+NANODHCP_SHA256 = os.environ.get(
+    "NETOS_NANODHCP_SHA256",
+    "bb4906ac7d864939e3bb408a42caca0d5851884e721328ff31abec1868483164",
+)
+
 _OPENVSWITCH_KNOWN_SHA256: dict[str, tuple[str, str]] = {
     "3.4.1": (
         "6e97ec7dfdda5b40b5103946d53e4f8b11edf66049fedbdcb323e1af67133de8",
@@ -126,13 +135,14 @@ class NetOSBuildrootBuilder:
         if self.external_dir.exists():
             shutil.rmtree(self.external_dir)
 
-        ovs_dir      = self.external_dir / "package" / "openvswitch"
-        mininet_dir  = self.external_dir / "package" / "mininet"
-        board_dir    = self.external_dir / "board" / "4stm4" / "netos"
-        overlay_dir  = board_dir / "rootfs_overlay"
-        configs_dir  = self.external_dir / "configs"
+        ovs_dir       = self.external_dir / "package" / "openvswitch"
+        mininet_dir   = self.external_dir / "package" / "mininet"
+        nanodhcp_dir  = self.external_dir / "package" / "nanodhcp"
+        board_dir     = self.external_dir / "board" / "4stm4" / "netos"
+        overlay_dir   = board_dir / "rootfs_overlay"
+        configs_dir   = self.external_dir / "configs"
 
-        for d in (ovs_dir, mininet_dir, overlay_dir, configs_dir):
+        for d in (ovs_dir, mininet_dir, nanodhcp_dir, overlay_dir, configs_dir):
             d.mkdir(parents=True)
 
         (self.external_dir / "external.desc").write_text(
@@ -142,6 +152,7 @@ class NetOSBuildrootBuilder:
         (self.external_dir / "Config.in").write_text(
             'source "$BR2_EXTERNAL_NETOS_PATH/package/openvswitch/Config.in"\n'
             'source "$BR2_EXTERNAL_NETOS_PATH/package/mininet/Config.in"\n'
+            'source "$BR2_EXTERNAL_NETOS_PATH/package/nanodhcp/Config.in"\n'
         )
         (self.external_dir / "external.mk").write_text(
             "include $(sort $(wildcard $(BR2_EXTERNAL_NETOS_PATH)/package/*/*.mk))\n"
@@ -161,6 +172,14 @@ class NetOSBuildrootBuilder:
         (mininet_dir / "S99mininet").write_text(self._mininet_init_script())
         (mininet_dir / "S99mininet").chmod(0o755)
         (mininet_dir / "config.startup").write_text(self._mininet_default_config())
+
+        # nanodhcp package — Rust/Cargo, downloaded from GitHub
+        (nanodhcp_dir / "Config.in").write_text(self._nanodhcp_config_in())
+        (nanodhcp_dir / "nanodhcp.mk").write_text(self._nanodhcp_mk())
+        (nanodhcp_dir / "nanodhcp.hash").write_text(self._nanodhcp_hash())
+        (nanodhcp_dir / "S10nanodhcp").write_text(self._nanodhcp_init_script())
+        (nanodhcp_dir / "S10nanodhcp").chmod(0o755)
+        (nanodhcp_dir / "nanodhcp.conf").write_text(self._nanodhcp_default_config())
 
         self._write_overlay(overlay_dir)
         post_build = board_dir / "post-build.sh"
@@ -462,6 +481,156 @@ dhcp-range 10.0.0.10,10.0.0.200,12h
 dns       8.8.8.8
 """
 
+    # ------------------------------------------------------------------
+    # nanodhcp package generators
+    # ------------------------------------------------------------------
+
+    def _nanodhcp_config_in(self) -> str:
+        return """\
+config BR2_PACKAGE_NANODHCP
+\tbool "nanodhcp"
+\tdepends on BR2_USE_MMU
+\tdepends on BR2_TOOLCHAIN_HAS_THREADS
+\tselect BR2_PACKAGE_HOST_RUSTC
+\thelp
+\t  Minimal DHCPv4 server for homelab / embedded Linux / appliance OS.
+\t  Pure Rust, no external crates — single static binary.
+\t
+\t  Reads /etc/nanodhcp.conf at startup, serves DHCP on the
+\t  configured interface.  Lease state is persisted to
+\t  /var/lib/nanodhcp/leases.
+\t
+\t  Installs:
+\t    /usr/sbin/nanodhcp       — DHCPv4 server binary
+\t    /etc/nanodhcp.conf       — default configuration
+\t    /etc/init.d/S10nanodhcp  — BusyBox init script
+\t    /var/lib/nanodhcp/       — lease state directory
+\t
+\t  https://github.com/4stm4/nanodhcp
+
+comment "nanodhcp needs a toolchain w/ threads"
+\tdepends on BR2_USE_MMU
+\tdepends on !BR2_TOOLCHAIN_HAS_THREADS
+"""
+
+    def _nanodhcp_mk(self) -> str:
+        return f"""\
+################################################################################
+#
+# nanodhcp — minimal DHCPv4 server (Rust)
+#
+################################################################################
+
+NANODHCP_VERSION      = {NANODHCP_VERSION}
+NANODHCP_SITE         = https://github.com/4stm4/nanodhcp/archive/$(NANODHCP_VERSION)
+NANODHCP_SOURCE       = nanodhcp-$(NANODHCP_VERSION).tar.gz
+NANODHCP_LICENSE      = AGPL-3.0
+NANODHCP_LICENSE_FILES = LICENSE
+
+define NANODHCP_INSTALL_TARGET_CMDS
+\t$(INSTALL) -D -m 0755 \\
+\t\t$(@D)/target/$(RUSTC_TARGET_NAME)/release/nanodhcp \\
+\t\t$(TARGET_DIR)/usr/sbin/nanodhcp
+\t$(INSTALL) -D -m 0644 \\
+\t\t$(BR2_EXTERNAL_NETOS_PATH)/package/nanodhcp/nanodhcp.conf \\
+\t\t$(TARGET_DIR)/etc/nanodhcp.conf
+\t$(INSTALL) -D -m 0755 \\
+\t\t$(BR2_EXTERNAL_NETOS_PATH)/package/nanodhcp/S10nanodhcp \\
+\t\t$(TARGET_DIR)/etc/init.d/S10nanodhcp
+\tmkdir -p $(TARGET_DIR)/var/lib/nanodhcp
+endef
+
+$(eval $(cargo-package))
+"""
+
+    def _nanodhcp_hash(self) -> str:
+        return f"""\
+# Locally calculated — nanodhcp commit {NANODHCP_VERSION[:12]}
+sha256  {NANODHCP_SHA256}  nanodhcp-{NANODHCP_VERSION}.tar.gz
+"""
+
+    def _nanodhcp_init_script(self) -> str:
+        return """\
+#!/bin/sh
+#
+# /etc/init.d/S10nanodhcp — BusyBox init script for nanodhcp
+# Starts the minimal DHCPv4 server at boot.
+#
+
+CONF=/etc/nanodhcp.conf
+PIDFILE=/var/run/nanodhcp.pid
+
+case "$1" in
+    start)
+        printf 'Starting nanodhcp: '
+        mkdir -p /var/lib/nanodhcp
+        start-stop-daemon --start --quiet --background \\
+            --pidfile "$PIDFILE" --make-pidfile \\
+            --exec /usr/sbin/nanodhcp -- "$CONF"
+        echo "OK"
+        ;;
+    stop)
+        printf 'Stopping nanodhcp: '
+        start-stop-daemon --stop --quiet --pidfile "$PIDFILE"
+        rm -f "$PIDFILE"
+        echo "OK"
+        ;;
+    restart|reload)
+        "$0" stop
+        "$0" start
+        ;;
+    status)
+        if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+            echo "nanodhcp: running (pid=$(cat "$PIDFILE"))"
+        else
+            echo "nanodhcp: stopped"
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+
+exit $?
+"""
+
+    def _nanodhcp_default_config(self) -> str:
+        return """\
+# /etc/nanodhcp.conf — nanodhcp DHCPv4 server configuration
+# https://github.com/4stm4/nanodhcp
+#
+# Format: key=value, one per line. Blank lines and # comments are ignored.
+#
+# ── Interface ─────────────────────────────────────────────────────────────────
+interface=eth0
+
+# ── Server identity ───────────────────────────────────────────────────────────
+# DHCP option 54 — must match the IP assigned to `interface`
+server_ip=10.0.0.1
+
+# ── Subnet ────────────────────────────────────────────────────────────────────
+subnet=10.0.0.0/24
+subnet_mask=255.255.255.0
+
+# ── Dynamic pool ──────────────────────────────────────────────────────────────
+pool_start=10.0.0.10
+pool_end=10.0.0.200
+
+# ── Default gateway and DNS ───────────────────────────────────────────────────
+router=10.0.0.1
+dns=10.0.0.1,8.8.8.8
+
+# ── Lease duration (seconds) ──────────────────────────────────────────────────
+lease_time=86400
+
+# ── Lease persistence ─────────────────────────────────────────────────────────
+lease_file=/var/lib/nanodhcp/leases
+
+# ── Static bindings ───────────────────────────────────────────────────────────
+# static=<name>,<mac>,<ip>
+# static=myserver,aa:bb:cc:dd:ee:ff,10.0.0.5
+"""
+
     def _write_overlay(self, overlay_dir: Path):
         profile_dir = overlay_dir / "etc" / "profile.d"
         profile_dir.mkdir(parents=True)
@@ -662,6 +831,12 @@ fi
             self._mininet_script(),
             self._mininet_init_script(),
             self._mininet_default_config(),
+            # nanodhcp external package
+            self._nanodhcp_mk(),
+            self._nanodhcp_config_in(),
+            self._nanodhcp_hash(),
+            self._nanodhcp_init_script(),
+            self._nanodhcp_default_config(),
             # post-build & overlay scripts
             self._post_build_script(),
             # branding constants baked into the image
@@ -669,6 +844,7 @@ fi
             f"NETOS_HOSTNAME={NETOS_HOSTNAME}",
             f"NETOS_NAME={NETOS_NAME}",
             f"OPENVSWITCH_VERSION={OPENVSWITCH_VERSION}",
+            f"NANODHCP_VERSION={NANODHCP_VERSION}",
         ]
         return _hashlib.md5("\n---\n".join(parts).encode()).hexdigest()[:16]
 
