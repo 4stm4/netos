@@ -267,8 +267,9 @@ if __name__ == "__main__":
         _base = Path(_img_output_dir) if _img_output_dir else PROJECT_ROOT
         _name = _img_filename if _img_filename else target.image_name
         _img_path = _base / _name
+    _produce_qcow2 = (plan.image_format == "qcow2")
     try:
-        create_img(target, image_path=_img_path)
+        create_img(target, image_path=_img_path, qcow2=_produce_qcow2)
     except Exception as e:
         logging_adapter.error(f"Не удалось создать образ: {e}")
         sys.exit(1)

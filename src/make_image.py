@@ -84,17 +84,53 @@ def _validate_boot_files(target: TargetConfig):
         )
 
 
+def _qcow2_path(raw_path: Path) -> Path:
+    """Return the qcow2 sibling of a raw image path.
+
+    ``qemu-x86.img``  → ``qemu-x86.qcow2``
+    ``raspi-zero2w.img`` → ``raspi-zero2w.qcow2``
+    """
+    return raw_path.with_suffix(".qcow2")
+
+
+def convert_to_qcow2(raw_path: Path, qcow2_path: "Path | None" = None) -> Path:
+    """Convert *raw_path* (raw disk image) to qcow2 format.
+
+    Returns the path to the produced ``.qcow2`` file.
+    Requires ``qemu-img`` to be installed (part of ``qemu-utils``).
+    """
+    dst = qcow2_path or _qcow2_path(raw_path)
+    print(f"Конвертируем {raw_path.name} → {dst.name} (qcow2)…")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    run(["qemu-img", "convert", "-f", "raw", "-O", "qcow2", str(raw_path), str(dst)])
+    size_mb = dst.stat().st_size / 1024 / 1024
+    print(f"qcow2 готов: {dst}  ({size_mb:.1f} MB)")
+    return dst
+
+
 def create_img(
     target: Union[str, TargetConfig] = "pi5",
     image_path: "Path | None" = None,
+    qcow2: bool = False,
 ):
-    """Create a raw disk image for *target*.
+    """Create a raw disk image for *target*, optionally converting to qcow2.
 
     *image_path* overrides the default location (``PROJECT_ROOT / target.image_name``).
     Set via ``NETOS_IMAGE_OUTPUT_DIR`` + ``NETOS_IMAGE_FILENAME`` env vars or
     programmatically from the configurator.
+
+    *qcow2* — when ``True`` (or when ``NETOS_IMAGE_FORMAT=qcow2`` env var is set),
+    the raw image is also converted to a ``.qcow2`` file next to the ``.img``.
+    The raw ``.img`` is kept so subsequent QEMU runs can choose the format.
     """
     target = _resolve_target(target)
+    # Respect NETOS_IMAGE_FORMAT env var; auto-enable for QEMU targets
+    _fmt = os.environ.get("NETOS_IMAGE_FORMAT", "").lower()
+    if _fmt == "qcow2":
+        qcow2 = True
+    elif not qcow2 and target.qemu_machine is not None:
+        # QEMU targets default to qcow2 for convenient replay
+        qcow2 = True
     image_size_mb, boot_size_mb = _image_layout(target)
     img_path = image_path if image_path is not None else PROJECT_ROOT / target.image_name
     img_path.parent.mkdir(parents=True, exist_ok=True)
@@ -198,14 +234,27 @@ unit: sectors
             if loopdev:
                 subprocess.run(_command(["losetup", "-d", loopdev], use_sudo=True), check=False)
 
-    print(f"Готово! Образ: {img_path}")
+    print(f"Готово! Raw образ: {img_path}")
+    if qcow2:
+        _qcow2_out = _qcow2_path(img_path)
+        convert_to_qcow2(img_path, _qcow2_out)
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description="Create 4stm4 netOS disk image from container/")
     parser.add_argument("--target", choices=sorted(TARGETS), default="pi5")
+    parser.add_argument(
+        "--qcow2",
+        action="store_true",
+        default=False,
+        help=(
+            "Convert raw image to qcow2 after creation "
+            "(default: on for QEMU targets, off for hardware targets). "
+            "Also controlled by NETOS_IMAGE_FORMAT=qcow2."
+        ),
+    )
     return parser
 
 if __name__ == "__main__":
     args = build_parser().parse_args()
-    create_img(args.target)
+    create_img(args.target, qcow2=args.qcow2)

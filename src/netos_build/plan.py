@@ -134,7 +134,7 @@ class ResolvedBuildPlan:
             buildroot_arch    = t.buildroot_arch,
             packages          = tuple(t.buildroot_package_lines),
             image_name        = t.image_name,
-            image_format      = "raw",
+            image_format      = "qcow2" if t.qemu_machine is not None else "raw",
             image_size_mb     = t.image_size_mb,
             boot_size_mb      = t.boot_size_mb,
             install_boot_files = t.install_boot_files,
