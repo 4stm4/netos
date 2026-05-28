@@ -124,6 +124,11 @@ groups:
       - BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y
       - BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
 
+  nanodhcp:
+    description: "nanodhcp — minimal DHCPv4 server (Rust, no deps, single binary)"
+    packages:
+      - BR2_PACKAGE_NANODHCP=y
+
   mininet:
     description: "Mininet network manager — interface config, DHCP server (opt-in, QEMU x86)"
     packages:

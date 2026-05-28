@@ -41,6 +41,40 @@ PRESETS: list[dict] = [
         },
     },
     {
+        "id": "qemu-x86-nanodhcp",
+        "name": "QEMU x86 + nanodhcp",
+        "icon": "🛜",
+        "description": "x86_64 QEMU образ с nanodhcp — минимальным DHCPv4-сервером на Rust. "
+                       "Один статический бинарник без зависимостей. "
+                       "Идеально для embedded-апплайансов и изолированных сетей.",
+        "tags": ["qemu", "x86_64", "dhcp", "rust", "embedded"],
+        "estimated_size_mb": 40,
+        "estimated_build_min": 40,
+        "profile": {
+            "name": "qemu-x86-nanodhcp",
+            "target": "qemu-x86",
+            "branding": {
+                "hostname": "netos-dhcp",
+                "console": "ttyS0",
+                "version": "0.1.0",
+            },
+            "packages": {
+                "enabled": [],
+                "custom": [
+                    "BR2_PACKAGE_BUSYBOX=y",
+                    "BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y",
+                    "BR2_PACKAGE_IPROUTE2=y",
+                    "BR2_PACKAGE_NANODHCP=y",
+                    "BR2_TARGET_ROOTFS_TAR=y",
+                    "BR2_TARGET_ROOTFS_TAR_NONE=y",
+                ],
+            },
+            "image": {"size_mb": 256, "boot_mb": 64},
+            "nervum": {"enabled": False},
+            "webui": {"source": "runtime"},
+        },
+    },
+    {
         "id": "qemu-x86-mininet",
         "name": "QEMU x86 Mininet",
         "icon": "🌐",
