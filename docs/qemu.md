@@ -1,178 +1,185 @@
 # Запуск в QEMU
 
-## Быстрый старт через run_qemu.py
+## Три варианта образов
 
-### qemu-virt (ARM64)
+| Образ | Файлы | Размер | Загрузка |
+|-------|-------|--------|----------|
+| **qemu-x86** (полный) | `qemu-x86.img` / `qemu-x86.qcow2` | ~200–500 МБ | ~30 с |
+| **qemu-x86-mini** (initramfs) | `rootfs.cpio.gz` | ~0.7 МБ | ~25 с |
+| **qemu-virt** (ARM64) | `qemu-virt.img` | ~300–500 МБ | ~60 с |
 
-```bash
-python3 src/run_qemu.py --target qemu-virt
-```
+---
 
-С явным портом SSH и таймаутом ожидания старта:
+## Запуск
 
-```bash
-python3 src/run_qemu.py --target qemu-virt --host-port 6641 --timeout 300
-```
-
-Со smoke-тестом Web UI (дождаться старта и проверить `/health`):
+### Через run_qemu.py (рекомендуется)
 
 ```bash
-python3 src/run_qemu.py --target qemu-virt --host-port 6641 --timeout 300 --check-webui
-```
-
-### qemu-x86 (x86_64)
-
-```bash
+# qemu-x86 (x86_64, полный образ)
 python3 src/run_qemu.py --target qemu-x86
+
+# qemu-virt (ARM64)
+python3 src/run_qemu.py --target qemu-virt
+
+# Увеличить таймаут ожидания старта
+python3 src/run_qemu.py --target qemu-x86 --timeout 120 --skip-tcp-check
 ```
 
+Скрипт автоматически пробрасывает порты:
+- `localhost:2222` → SSH внутри VM
+- `localhost:6640` → OVSDB
+- `localhost:8080` → Web UI
+
+---
+
+### Вручную — полный образ qemu-x86
+
 ```bash
-python3 src/run_qemu.py --target qemu-x86 --host-port 6641 --timeout 300 --check-webui
+KERNEL=temp/mainline_linux/arch/x86/boot/bzImage
+IMAGE=qemu-x86.qcow2   # или qemu-x86.img
+
+sudo qemu-system-x86_64 \
+  -M q35 -cpu qemu64 -m 512 -smp 2 \
+  -kernel $KERNEL \
+  -drive file=$IMAGE,format=qcow2,if=virtio \
+  -append "console=ttyS0 root=/dev/vda2 rootfstype=ext4 rw rootwait" \
+  -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:8080 \
+  -device virtio-net-pci,netdev=net0 \
+  -nographic -no-reboot
+```
+
+> Если образ в формате `raw` (`.img`) — замените `format=qcow2` на `format=raw`.
+
+---
+
+### Вручную — мини initramfs (qemu-x86-mini)
+
+Без диска, загружается полностью в ОЗУ за ~25 с:
+
+```bash
+KERNEL=temp/mainline_linux/arch/x86/boot/bzImage
+INITRD=path/to/rootfs.cpio.gz
+
+sudo qemu-system-x86_64 \
+  -M q35 -cpu qemu64 -m 256 \
+  -kernel $KERNEL \
+  -initrd $INITRD \
+  -append "console=ttyS0 init=/init" \
+  -nographic -no-reboot
 ```
 
 ---
 
-## Ручной запуск QEMU — ARM64 (qemu-virt)
+### Вручную — ARM64 (qemu-virt)
 
 ```bash
+KERNEL=temp/mainline_linux/arch/arm64/boot/Image
+IMAGE=qemu-virt.qcow2
+
 qemu-system-aarch64 \
-  -machine virt \
-  -cpu cortex-a72 \
-  -m 512M \
-  -smp 2 \
-  -kernel temp/kernel-qemu-virt/Image \
-  -append "root=/dev/vda rw console=ttyAMA0 earlycon" \
-  -drive file=output/qemu-virt.img,format=raw,if=virtio \
-  -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::6641-:6641,hostfwd=tcp::8080-:8080 \
-  -device virtio-net-device,netdev=net0 \
-  -nographic
-```
-
-### Описание флагов
-
-| Флаг | Описание |
-|------|----------|
-| `-machine virt` | QEMU виртуальная ARM-машина (нет физического аналога) |
-| `-cpu cortex-a72` | Эмуляция процессора Cortex-A72 (как на RPi4) |
-| `-m 512M` | Объём ОЗУ для VM |
-| `-smp 2` | Число виртуальных CPU |
-| `-kernel` | Путь к скомпилированному ядру `Image` |
-| `-append` | Параметры командной строки ядра: rootfs на `/dev/vda`, консоль `ttyAMA0` |
-| `-drive` | Образ диска в формате RAW, подключается как `virtio-blk` |
-| `-netdev user,...` | SLIRP-сеть с пробросом портов с хоста в VM |
-| `-device virtio-net-device` | Виртуальный сетевой адаптер |
-| `-nographic` | Вывод в терминал (без графического окна), консоль через serial |
-
----
-
-## Ручной запуск QEMU — x86_64 (qemu-x86)
-
-```bash
-qemu-system-x86_64 \
-  -machine q35 \
-  -cpu qemu64 \
-  -m 512M \
-  -smp 2 \
-  -kernel temp/kernel-qemu-x86/bzImage \
-  -append "root=/dev/sda rw console=ttyS0 earlycon" \
-  -drive file=output/qemu-x86.img,format=raw,if=ide \
-  -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::6641-:6641,hostfwd=tcp::8080-:8080 \
-  -device e1000,netdev=net0 \
-  -nographic
-```
-
-### Описание флагов
-
-| Флаг | Описание |
-|------|----------|
-| `-machine q35` | Чипсет Intel Q35 (PCIe, AHCI) |
-| `-cpu qemu64` | Базовая x86_64 эмуляция |
-| `-kernel` | Путь к `bzImage` (сжатое ядро для x86) |
-| `-append` | Rootfs на `/dev/sda`, консоль `ttyS0` |
-| `-drive ... if=ide` | Диск через IDE/AHCI |
-| `-device e1000` | Эмуляция Intel Gigabit e1000 NIC |
-
----
-
-## Таблица проброса портов
-
-| Порт хоста | Порт VM | Сервис |
-|------------|---------|--------|
-| `2222` | `22` | SSH (Dropbear) |
-| `6641` | `6641` | OVSDB (Open vSwitch Database) |
-| `8080` | `8080` | Web UI (Testum) |
-
-Подключение к SSH:
-
-```bash
-ssh -p 2222 root@localhost
+  -M virt -cpu cortex-a72 -m 512 -smp 2 \
+  -kernel $KERNEL \
+  -drive file=$IMAGE,format=qcow2,if=virtio \
+  -append "console=ttyAMA0 root=/dev/vda2 rootfstype=ext4 rw rootwait" \
+  -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:8080 \
+  -device virtio-net-pci,netdev=net0 \
+  -nographic -no-reboot
 ```
 
 ---
 
-## Smoke-тесты — маркеры в логе консоли
+## Вход в систему
 
-`run_qemu.py --check-webui` ожидает появления следующих строк в serial-выводе:
+### Серийная консоль (прямо в терминале)
 
-| Маркер | Значение |
-|--------|----------|
-| `OVSDB_STARTED` | ovsdb-server успешно запущен |
-| `OVS_VSWITCHD_STARTED` | ovs-vswitchd успешно запущен |
-| `NET_AGENT_STARTED` | сетевой агент/Nervum запущен |
+После загрузки в том же окне появится приглашение входа:
 
-Если маркеры не появились за `--timeout` секунд — тест считается проваленным.
+```
+netos login: root
+Password:         ← пустой пароль, просто Enter
+# 
+```
 
 ---
 
-## Подключение к сервисам
-
-### OVSDB (Open vSwitch)
+### SSH (после загрузки)
 
 ```bash
-# Просмотр конфигурации OVS
-ovsdb-client dump tcp:localhost:6641
-
-# Или через ovs-vsctl с remote
-ovs-vsctl --db=tcp:localhost:6641 show
+ssh -p 2222 -o StrictHostKeyChecking=no root@localhost
 ```
 
-### Web UI (Testum)
+> SSH работает только если в образе установлен Dropbear (`BR2_PACKAGE_DROPBEAR=y`).  
+> В мини initramfs SSH нет — только консоль.
+
+---
+
+## Выход
+
+### Из консоли внутри VM
 
 ```bash
-# Проверка health endpoint
-curl http://localhost:8080/health
-
-# Открыть в браузере
-xdg-open http://localhost:8080
+poweroff       # мягкое выключение (ACPI)
+# или
+halt -f        # принудительно
 ```
 
-### SSH (Dropbear)
+---
+
+### Из терминала снаружи (если QEMU завис или нет доступа к консоли)
+
+**Комбинация клавиш QEMU:**
+
+```
+Ctrl+A  затем  X
+```
+
+Нажать `Ctrl+A`, отпустить, затем нажать `X` — QEMU завершится немедленно.
+
+> Другие полезные комбинации:
+> | Комбинация | Действие |
+> |------------|----------|
+> | `Ctrl+A X` | Выход из QEMU |
+> | `Ctrl+A H` | Справка по комбинациям |
+> | `Ctrl+A C` | Открыть QEMU monitor (для отладки) |
+
+**Или через kill:**
 
 ```bash
-ssh -p 2222 root@localhost
+pkill -f qemu-system-x86_64
+# или
+pkill -f qemu-system-aarch64
 ```
+
+---
+
+## Таблица портов (при запуске через run_qemu.py)
+
+| Хост | VM | Сервис |
+|------|----|--------|
+| `localhost:2222` | `22` | SSH (Dropbear) |
+| `localhost:6640` | `6640` | OVSDB |
+| `localhost:8080` | `8080` | Web UI |
 
 ---
 
 ## Устранение неполадок
 
-**VM не стартует, ошибка "Could not open ... Image"**
-Убедитесь, что сборка завершена и файл существует:
-```bash
-ls -lh output/qemu-virt.img temp/kernel-qemu-virt/Image
-```
+**Нет вывода в консоли после запуска**
+→ Ядро загрузилось, но `console=` не совпадает. Для x86 должно быть `ttyS0`, для ARM — `ttyAMA0`.
 
-**Зависание на "Loading initial ramdisk"**
-Ядро и образ должны быть собраны для одного target. Не перемешивайте `qemu-virt` ядро с `qemu-x86` образом.
+**Kernel panic: not syncing: VFS: Unable to mount root fs**
+→ Неверный `root=` или образ диска не подключён. Проверьте `-drive file=...` и параметр `-append root=/dev/...`.
 
-**"Address already in use" при запуске QEMU**
-Порт уже занят другим процессом или предыдущим QEMU. Завершите старый процесс:
+**"Address already in use"**
+→ Предыдущий QEMU не завершился:
 ```bash
 pkill -f qemu-system
 ```
 
-**Консоль не выводит текст**
-Проверьте, что в `-append` указан правильный console: `ttyAMA0` для ARM, `ttyS0` для x86.
-
-**Web UI не отвечает на порту 8080**
-Проверьте, что Testum запустился — в серийном выводе должна быть строка `NET_AGENT_STARTED`. Если сборка была без Web UI — порт будет недоступен.
+**На RPi4/ARM-хосте очень медленно (эмуляция x86)**
+→ Нормально. qemu-x86 на ARM64 эмулирует ISA полностью — загрузка занимает 20–30 с.  
+Ускорить нельзя (нет KVM для другой архитектуры), но на x86-хосте с KVM будет мгновенно:
+```bash
+# Только на x86-хосте:
+qemu-system-x86_64 -enable-kvm ...
+```

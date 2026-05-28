@@ -79,8 +79,9 @@ def build_qemu_cmd(
         raise RuntimeError(f"QEMU binary {qemu_bin} не поддерживает machine={target.qemu_machine}")
 
     hostfwds = [
-        f"hostfwd=tcp:127.0.0.1:{host_port}-127.0.0.1:6640",
-        f"hostfwd=tcp:127.0.0.1:{webui_host_port}-127.0.0.1:{webui_guest_port}",
+        f"hostfwd=tcp:127.0.0.1:{host_port}-0.0.0.0:6640",
+        f"hostfwd=tcp:127.0.0.1:{webui_host_port}-0.0.0.0:{webui_guest_port}",
+        "hostfwd=tcp:127.0.0.1:2222-0.0.0.0:22",
     ]
     cmd = [
         qemu_bin,
