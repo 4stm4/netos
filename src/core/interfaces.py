@@ -16,11 +16,11 @@ class FileSystemPort(ABC):
 
 class LoggerPort(ABC):
     @abstractmethod
-    def info(self, message: str):
+    def info(self, message: str, *args):
         pass
 
     @abstractmethod
-    def error(self, message: str):
+    def error(self, message: str, *args):
         pass
 
 class NetworkConfiguratorPort(ABC):
