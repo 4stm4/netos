@@ -4,8 +4,32 @@ import subprocess
 import sys
 
 
-def install_dependencies():
-    """Install host-side build dependencies for kernel, Buildroot and image creation."""
+_CROSS_TOOLCHAIN: dict[str, list[str]] = {
+    # kernel_arch → apt packages for cross-compilation
+    "arm64": [
+        "gcc-aarch64-linux-gnu",
+        "g++-aarch64-linux-gnu",
+        "binutils-aarch64-linux-gnu",
+    ],
+    "x86": [
+        "gcc-x86-64-linux-gnu",
+        "g++-x86-64-linux-gnu",
+        "binutils-x86-64-linux-gnu",
+    ],
+    "x86_64": [
+        "gcc-x86-64-linux-gnu",
+        "g++-x86-64-linux-gnu",
+        "binutils-x86-64-linux-gnu",
+    ],
+}
+
+
+def install_dependencies(kernel_arch: str = "arm64") -> None:
+    """Install host-side build dependencies for kernel, Buildroot and image creation.
+
+    *kernel_arch* selects the cross-compiler toolchain (``"arm64"`` | ``"x86"`` | ``"x86_64"``).
+    Defaults to ``"arm64"`` for backward compatibility.
+    """
     logging.info("Устанавливаем зависимости сборочной VM...")
     prefix = [] if os.geteuid() == 0 else ["sudo"]
 
@@ -37,10 +61,13 @@ def install_dependencies():
         "dosfstools",
         "e2fsprogs",
         "util-linux",
+        "qemu-utils",
+        "qemu-system-x86",
         "qemu-system-aarch64",
     ]
     prebuilt_kernel = os.environ.get("NETOS_PREBUILT_KERNEL_IMAGE") or os.environ.get("LITAINER_PREBUILT_KERNEL_IMAGE")
     if not prebuilt_kernel:
+        cross_pkgs = _CROSS_TOOLCHAIN.get(kernel_arch, _CROSS_TOOLCHAIN["arm64"])
         dependencies.extend(
             [
                 # Linux kernel build
@@ -51,9 +78,7 @@ def install_dependencies():
                 "bison",
                 "flex",
                 "kmod",
-                "gcc-aarch64-linux-gnu",
-                "g++-aarch64-linux-gnu",
-                "binutils-aarch64-linux-gnu",
+                *cross_pkgs,
             ]
         )
 

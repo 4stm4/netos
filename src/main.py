@@ -227,7 +227,7 @@ if __name__ == "__main__":
     ROOTFS_PATH.mkdir(parents=True, exist_ok=True)
     # Инициализация контейнера
     setup = ContainerSetup(file_adapter, logging_adapter, network_adapter)
-    install_dependencies()
+    install_dependencies(kernel_arch=target.kernel_arch)
     linux_kernel.download_kernel()
     linux_kernel.unpack_kernel()
     linux_kernel.configure_kernel()
