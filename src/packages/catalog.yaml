@@ -124,6 +124,11 @@ groups:
       - BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y
       - BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
 
+  mininet:
+    description: "Mininet network manager — interface config, DHCP server (opt-in, QEMU x86)"
+    packages:
+      - BR2_PACKAGE_MININET=y
+
   rootfs:
     description: "Rootfs output format (required — produces rootfs.tar)"
     packages:
