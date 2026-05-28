@@ -14,8 +14,8 @@ class LoggingAdapter(LoggerPort):
         )
         self.logger = logging.getLogger()
 
-    def info(self, message: str):
-        self.logger.info(message)
+    def info(self, message: str, *args):
+        self.logger.info(message, *args)
 
-    def error(self, message: str):
-        self.logger.error(message)
+    def error(self, message: str, *args):
+        self.logger.error(message, *args)
