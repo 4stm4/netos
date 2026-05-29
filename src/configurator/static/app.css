@@ -590,6 +590,47 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
   padding: 1px 5px; color: var(--fg-3);
 }
 
+/* Build history */
+.builds-history {
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.builds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.build-hist-row {
+  display: grid;
+  grid-template-columns: 12px 110px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  border: 1px solid transparent;
+  color: var(--fg-2);
+}
+.build-hist-row:hover { background: var(--bg-2); color: var(--fg); }
+.build-hist-row.active { border-color: var(--info); background: color-mix(in srgb, var(--info) 8%, var(--bg-1)); color: var(--fg); }
+.build-hist-target { font-weight: 500; color: var(--fg); }
+.build-hist-time, .build-hist-lines { white-space: nowrap; }
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.status-dot.running { background: var(--warn); animation: blink 1.2s ease-in-out infinite; }
+.status-dot.done    { background: var(--ok); }
+.status-dot.error   { background: var(--err); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

@@ -8,10 +8,16 @@ import subprocess
 import threading
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncGenerator, Literal
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+BUILDS_DIR = PROJECT_ROOT / "builds"
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 # Stage detection patterns (checked in order against each output line)
 _STAGE_PATTERNS: list[tuple[str, str]] = [
@@ -37,12 +43,65 @@ class BuildState:
     status: Status = "running"
     stage: str = "init"
     log_lines: list[str] = field(default_factory=list)
-    _queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    started_at: str = ""
+    finished_at: str = ""
+    _queue: asyncio.Queue | None = None
     _loop: asyncio.AbstractEventLoop | None = None
 
 
 # Global registry
 _builds: dict[str, BuildState] = {}
+
+
+def _write_meta(state: BuildState) -> None:
+    try:
+        BUILDS_DIR.mkdir(exist_ok=True)
+        (BUILDS_DIR / f"{state.build_id}.json").write_text(json.dumps({
+            "build_id": state.build_id,
+            "target": state.target,
+            "status": state.status,
+            "stage": state.stage,
+            "started_at": state.started_at,
+            "finished_at": state.finished_at,
+        }))
+    except Exception:
+        pass
+
+
+def _write_log(state: BuildState) -> None:
+    try:
+        (BUILDS_DIR / f"{state.build_id}.log").write_text("\n".join(state.log_lines))
+    except Exception:
+        pass
+
+
+def _load_builds_from_disk() -> None:
+    if not BUILDS_DIR.exists():
+        return
+    for f in sorted(BUILDS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            meta = json.loads(f.read_text())
+            bid = meta["build_id"]
+            if bid in _builds:
+                continue
+            crashed = meta.get("status") == "running"
+            state = BuildState(
+                build_id=bid,
+                target=meta.get("target", ""),
+                status="error" if crashed else meta.get("status", "error"),
+                stage=meta.get("stage", ""),
+                started_at=meta.get("started_at", ""),
+                finished_at=meta.get("finished_at", ""),
+            )
+            if crashed:
+                state.finished_at = state.started_at
+                _write_meta(state)
+            log_file = BUILDS_DIR / f"{bid}.log"
+            if log_file.exists():
+                state.log_lines = log_file.read_text().splitlines()
+            _builds[bid] = state
+        except Exception:
+            pass
 
 
 def get_build(build_id: str) -> BuildState | None:
@@ -51,13 +110,15 @@ def get_build(build_id: str) -> BuildState | None:
 
 def list_builds() -> list[dict]:
     result = []
-    for b in _builds.values():
+    for b in sorted(_builds.values(), key=lambda b: b.started_at, reverse=True):
         result.append({
             "build_id": b.build_id,
             "target": b.target,
             "status": b.status,
             "stage": b.stage,
             "log_lines": len(b.log_lines),
+            "started_at": b.started_at,
+            "finished_at": b.finished_at,
         })
     return result
 
@@ -125,6 +186,9 @@ def _reader_thread(
                 "stage": state.stage,
                 "build_id": state.build_id,
             })
+        state.finished_at = _now()
+        _write_meta(state)
+        _write_log(state)
         asyncio.run_coroutine_threadsafe(
             state._queue.put(final), loop
         )
@@ -134,6 +198,9 @@ def _reader_thread(
         )
     except Exception as exc:
         state.status = "error"
+        state.finished_at = _now()
+        _write_meta(state)
+        _write_log(state)
         error_payload = json.dumps({
             "event": "error",
             "data": str(exc),
@@ -156,10 +223,13 @@ def start_build(
     """Start a build subprocess and return a build_id."""
     build_id = uuid.uuid4().hex[:12]
     state = BuildState(build_id=build_id, target=target)
+    state.started_at = _now()
     _builds[build_id] = state
+    _write_meta(state)
 
     loop = asyncio.get_event_loop()
     state._loop = loop
+    state._queue = asyncio.Queue()
 
     env = dict(os.environ)
     if env_override:
@@ -241,6 +311,10 @@ async def stream_events(build_id: str) -> AsyncGenerator[str, None]:
         yield f"data: {final}\n\n"
         return
 
+    if state._queue is None:
+        yield f"data: {json.dumps({'event': 'error', 'data': 'Build queue unavailable.', 'build_id': build_id, 'stage': state.stage})}\n\n"
+        return
+
     # Stream live events from queue
     while True:
         try:
@@ -253,3 +327,7 @@ async def stream_events(build_id: str) -> AsyncGenerator[str, None]:
         if item is None:
             break
         yield f"data: {item}\n\n"
+
+
+# Populate registry from disk on import (survives server restarts)
+_load_builds_from_disk()

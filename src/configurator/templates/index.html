@@ -697,6 +697,30 @@
         <div class="build-stage" x-show="buildStage" x-text="buildStage"></div>
       </div>
 
+      <!-- ── История сборок ──────────────────────────────────────── -->
+      <div class="builds-history">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span class="section-label" style="margin:0">История сборок</span>
+          <button class="btn-sm" @click="loadBuilds()" :disabled="buildsLoading">↻</button>
+          <span x-show="viewingBuildId" style="font-size:12px;color:var(--fg-2)">
+            — <span class="mono" x-text="viewingBuildId"></span>
+          </span>
+        </div>
+        <div x-show="builds.length === 0 && !buildsLoading" style="color:var(--fg-2);font-size:13px;padding:4px 0">Сборок нет</div>
+        <div class="builds-list">
+          <template x-for="b in builds" :key="b.build_id">
+            <div class="build-hist-row" @click="viewBuild(b)"
+                 :class="{ active: viewingBuildId === b.build_id }">
+              <span class="status-dot" :class="b.status"></span>
+              <span class="mono build-hist-id" x-text="b.build_id"></span>
+              <span class="build-hist-target" x-text="b.target"></span>
+              <span class="build-hist-time" x-text="fmtDate(b.started_at)"></span>
+              <span class="build-hist-lines mono" x-text="b.log_lines + ' строк'"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+
       <div class="build-log-wrap">
         <div class="build-log" id="build-log">
           <template x-for="(ev, i) in buildLog" :key="i">
@@ -847,6 +871,9 @@ function app() {
     buildLog: [],
     building: false,
     buildStage: '',
+    builds: [],
+    buildsLoading: false,
+    viewingBuildId: null,
     cache: null,
     cacheLoading: false,
     cacheClearing: false,
@@ -878,6 +905,7 @@ function app() {
       this.presets   = ps
       this.refreshCache()
       this.refreshArtifactCache()
+      this.$watch('step', v => { if (v === 6) this.loadBuilds() })
     },
 
     // ── computed ───────────────────────────────────────────────
@@ -1244,6 +1272,43 @@ function app() {
         await this.refreshArtifactCache()
       } catch (e) {
         this.artifactMsg = `Ошибка: ${e}`
+      }
+    },
+
+    async loadBuilds() {
+      this.buildsLoading = true
+      try {
+        this.builds = await fetch('/api/builds').then(r => r.json())
+      } finally {
+        this.buildsLoading = false
+      }
+    },
+
+    async viewBuild(b) {
+      const full = await fetch(`/api/builds/${b.build_id}`).then(r => r.json())
+      this.buildLog = full.log_lines.map(l => ({ event: 'log', data: l }))
+      this.buildStage = full.stage
+      this.viewingBuildId = b.build_id
+      this.$nextTick(() => {
+        const el = document.getElementById('build-log')
+        if (el) el.scrollTop = el.scrollHeight
+      })
+      if (full.status === 'running' && !this.building) {
+        this.building = true
+        const es = new EventSource(`/api/builds/${b.build_id}/events`)
+        es.onmessage = e => {
+          const ev = JSON.parse(e.data)
+          this.buildLog.push(ev)
+          if (ev.stage) this.buildStage = ev.stage
+          this.$nextTick(() => {
+            const el = document.getElementById('build-log')
+            if (el) el.scrollTop = el.scrollHeight
+          })
+        }
+        es.addEventListener('done', () => {
+          es.close(); this.building = false; this.buildStage = 'Готово ✓'; this.loadBuilds()
+        })
+        es.onerror = () => { es.close(); this.building = false }
       }
     },
   }

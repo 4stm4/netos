@@ -35,6 +35,8 @@ def get_build_info(build_id: str) -> dict[str, Any]:
         "status": state.status,
         "stage": state.stage,
         "log_lines": state.log_lines,
+        "started_at": state.started_at,
+        "finished_at": state.finished_at,
     }
 
 
