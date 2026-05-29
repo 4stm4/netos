@@ -71,9 +71,11 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_WIRELESS=y",
     "CONFIG_CFG80211=y",
     "CONFIG_MAC80211=y",
-    "CONFIG_BRCMUTIL=y",
-    "CONFIG_BRCMFMAC=y",
+    "CONFIG_BRCMUTIL=m",
+    "CONFIG_BRCMFMAC=m",
     "CONFIG_BRCMFMAC_SDIO=y",
+    "CONFIG_MODULES=y",
+    "CONFIG_MODULE_UNLOAD=y",
 )
 
 
@@ -189,7 +191,7 @@ TARGETS = {
         ),
         install_boot_files=True,
         kernel_config_options=ZERO2W_KERNEL_OPTIONS,
-        build_kernel_modules=False,
+        build_kernel_modules=True,
         image_size_mb=1024,
         boot_size_mb=256,
     ),
