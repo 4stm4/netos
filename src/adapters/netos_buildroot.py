@@ -1090,3 +1090,10 @@ fi
             ["sudo", "tar", "-xf", str(rootfs_tar), "-C", str(self.rootfs_path)],
             check=True,
         )
+        # Return ownership to current user so subsequent writes (fstab, configs, etc.)
+        # don't need root. Device nodes keep their correct type — only ownership changes.
+        import getpass
+        subprocess.run(
+            ["sudo", "chown", "-R", f"{getpass.getuser()}:", str(self.rootfs_path)],
+            check=True,
+        )
