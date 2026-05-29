@@ -8,6 +8,42 @@ from __future__ import annotations
 
 PRESETS: list[dict] = [
     {
+        "id": "zero2w-tinywifi",
+        "name": "Pi Zero 2W — TinyWifi AP",
+        "icon": "📡",
+        "description": "Минимальный Wi-Fi роутер на Pi Zero 2W. "
+                       "hostapd (WPA2 AP), nftables NAT, nanodhcp, dropbear SSH, uhttpd. "
+                       "Без OVS / Testum / nervum — только AP-функциональность.",
+        "tags": ["zero2w", "arm64", "wifi", "ap", "router", "embedded"],
+        "estimated_size_mb": 256,
+        "estimated_build_min": 90,
+        "profile": {
+            "name": "zero2w-tinywifi",
+            "target": "zero2w",
+            "appliance": {"type": "tinywifi"},
+            "branding": {
+                "hostname": "tinywifi",
+                "console": "ttyAMA0",
+                "version": "0.1.0",
+            },
+            "network": {
+                "wifi": {
+                    "ssid": "TinyWifi",
+                    "psk": "tinywifi123",
+                    "country": "US",
+                    "bootstrap": False,
+                },
+            },
+            "packages": {
+                "enabled": [],
+                "custom": [],
+            },
+            "image": {"size_mb": 1024, "boot_mb": 256},
+            "nervum": {"enabled": False},
+            "webui": {"source": "runtime"},
+        },
+    },
+    {
         "id": "qemu-x86-mini",
         "name": "QEMU x86 Mini",
         "icon": "🧊",

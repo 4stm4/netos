@@ -58,6 +58,19 @@ def profile_to_env(profile: Profile) -> dict[str, str]:
         if profile.nervum.source == "local":
             env["NETOS_NERVUM_SOURCE_DIR"] = profile.nervum.source_dir
 
+    # appliance flavor
+    if profile.appliance.type != "netos":
+        env["NETOS_APPLIANCE"] = profile.appliance.type
+
+    # Wi-Fi AP параметры для TinyWifi (SSID/PSK/country из профиля)
+    if profile.appliance.type == "tinywifi":
+        if profile.network.wifi.ssid:
+            env.setdefault("NETOS_WIFI_SSID", profile.network.wifi.ssid)
+        if profile.network.wifi.psk:
+            env.setdefault("NETOS_WIFI_PSK", profile.network.wifi.psk)
+        if profile.network.wifi.country:
+            env.setdefault("NETOS_WIFI_COUNTRY", profile.network.wifi.country)
+
     # paths
     if profile.paths.temp_dir:
         env["NETOS_TEMP_DIR"] = profile.paths.temp_dir
