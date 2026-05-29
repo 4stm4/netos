@@ -292,11 +292,12 @@ if __name__ == "__main__":
         )
     _img_output_dir  = os.environ.get("NETOS_IMAGE_OUTPUT_DIR", "") or None
     _img_filename    = os.environ.get("NETOS_IMAGE_FILENAME", "") or None
-    _img_path: Path | None = None
-    if _img_output_dir or _img_filename:
-        _base = Path(_img_output_dir) if _img_output_dir else PROJECT_ROOT
-        _name = _img_filename if _img_filename else target.image_name
-        _img_path = _base / _name
+    _base = Path(_img_output_dir) if _img_output_dir else PROJECT_ROOT
+    if not _img_filename:
+        from datetime import date
+        _appliance = os.environ.get("NETOS_APPLIANCE", "").lower() or "netos"
+        _img_filename = f"{_appliance}-{target.name}-{date.today().strftime('%y%m%d')}.img"
+    _img_path = _base / _img_filename
     _produce_qcow2 = (plan.image_format == "qcow2")
     try:
         create_img(target, image_path=_img_path, qcow2=_produce_qcow2)

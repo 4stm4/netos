@@ -11,7 +11,7 @@ from src.configurator.app import create_app
 def main():
     parser = argparse.ArgumentParser(description="netOS Build Configurator")
     parser.add_argument("--port", type=int, default=5173)
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     args = parser.parse_args()
     app = create_app()
     import uvicorn

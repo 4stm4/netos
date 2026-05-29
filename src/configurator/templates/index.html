@@ -905,6 +905,7 @@ function app() {
       this.presets   = ps
       this.refreshCache()
       this.refreshArtifactCache()
+      this.loadBuilds()
       this.$watch('step', v => { if (v === 6) this.loadBuilds() })
     },
 
