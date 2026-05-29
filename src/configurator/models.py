@@ -87,6 +87,10 @@ class NervumConfig(BaseModel):
     source_dir: str = ""
 
 
+class ApplianceConfig(BaseModel):
+    type: Literal["netos", "tinywifi"] = "netos"
+
+
 class ImageConfig(BaseModel):
     size_mb: int = 512
     boot_mb: int = 64
@@ -125,6 +129,7 @@ class Profile(BaseModel):
     nervum: NervumConfig = NervumConfig()
     image: ImageConfig = ImageConfig()
     paths: PathsConfig = PathsConfig()
+    appliance: ApplianceConfig = ApplianceConfig()
 
 
 class BuildEvent(BaseModel):
