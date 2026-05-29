@@ -86,4 +86,11 @@ class FileAdapter(FileSystemPort):
     def clear_container(self):
         """Очищает контейнер, размонтируя proc и удаляя содержимое rootfs."""
         self._unmount_proc()
-        self._clear_container_directory(self.rootfs_path)
+        if self.rootfs_path.exists():
+            # Device nodes from sudo tar are owned by root — use sudo rm -rf.
+            import subprocess
+            subprocess.run(
+                ["sudo", "rm", "-rf", str(self.rootfs_path)],
+                check=True,
+            )
+        self.rootfs_path.mkdir(parents=True, exist_ok=True)
