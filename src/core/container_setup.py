@@ -227,7 +227,14 @@ exit 0
         ]
         for path, mode, dev in nodes:
             if path.exists():
-                continue
+                st = os.stat(path)
+                if stat.S_ISCHR(st.st_mode) and st.st_rdev == dev:
+                    continue  # уже правильный char device
+                # fakeroot мог создать обычный файл вместо char device — удаляем
+                try:
+                    subprocess.run(["sudo", "rm", "-f", str(path)], check=True)
+                except subprocess.CalledProcessError:
+                    path.unlink(missing_ok=True)
             try:
                 os.mknod(path, mode, dev)
                 self.logger.info(f"Создан узел устройства: {path}")
