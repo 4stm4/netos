@@ -716,6 +716,8 @@
               <span class="build-hist-target" x-text="b.target"></span>
               <span class="build-hist-time" x-text="fmtDate(b.started_at)"></span>
               <span class="build-hist-lines mono" x-text="b.log_lines + ' строк'"></span>
+              <button class="btn-del-build" x-show="b.status !== 'running'"
+                @click.stop="fetch('/api/builds/'+b.build_id,{method:'DELETE'}).then(()=>{ if(viewingBuildId===b.build_id){viewingBuildId=null;buildLog=[]} loadBuilds() })">×</button>
             </div>
           </template>
         </div>

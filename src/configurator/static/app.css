@@ -606,7 +606,7 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
 }
 .build-hist-row {
   display: grid;
-  grid-template-columns: 12px 110px 1fr auto auto;
+  grid-template-columns: 12px 110px 1fr auto auto auto;
   gap: 10px;
   align-items: center;
   padding: 5px 8px;
@@ -619,6 +619,14 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
 .build-hist-row:hover { background: var(--bg-2); color: var(--fg); }
 .build-hist-row.active { border-color: var(--info); background: color-mix(in srgb, var(--info) 8%, var(--bg-1)); color: var(--fg); }
 .build-hist-target { font-weight: 500; color: var(--fg); }
+.btn-del-build {
+  background: none; border: none; cursor: pointer;
+  color: var(--fg-3); font-size: 14px; line-height: 1;
+  padding: 0 2px; opacity: 0;
+  transition: opacity .15s, color .15s;
+}
+.build-hist-row:hover .btn-del-build { opacity: 1; }
+.btn-del-build:hover { color: var(--error); }
 .build-hist-time, .build-hist-lines { white-space: nowrap; }
 .status-dot {
   width: 8px; height: 8px;
