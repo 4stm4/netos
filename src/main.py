@@ -5,6 +5,7 @@ from adapters.network_adapter import NetworkAdapter
 from adapters.package_installer import install_dependencies
 from adapters.linux_kernel import LinuxKernel
 from adapters.netos_buildroot import NetOSBuildrootBuilder, BUILDROOT_VERSION, BUILDROOT_URL, BUILDROOT_SHA256, OPENVSWITCH_VERSION
+from adapters.tinywifi_setup import TinyWifiSetup
 from make_image import create_img
 from netos_branding import NETOS_HOSTNAME
 from targets import TARGETS, get_target
@@ -61,6 +62,10 @@ def build_parser():
     return parser
 
 
+def _is_tinywifi() -> bool:
+    return os.environ.get("NETOS_APPLIANCE", "").lower() == "tinywifi"
+
+
 def _apply_profile(profile_path: str) -> None:
     """Load a YAML profile and set env vars (existing env takes priority)."""
     try:
@@ -75,6 +80,10 @@ def _apply_profile(profile_path: str) -> None:
 
     with path.open() as f:
         data = yaml.safe_load(f)
+
+    # appliance flavor
+    appliance = data.get("appliance", {})
+    _setenv_if_unset("NETOS_APPLIANCE", appliance.get("type", ""))
 
     # branding
     branding = data.get("branding", {})
@@ -234,32 +243,44 @@ if __name__ == "__main__":
     linux_kernel.compile_kernel()
 
     _cache_dir = os.environ.get("NETOS_CACHE_DIR", "") or None
+
+    # Для TinyWifi используем только группу tinywifi вместо DEFAULT_GROUPS
+    _groups_override = ["tinywifi"] if _is_tinywifi() else None
+
     NetOSBuildrootBuilder(
         ROOTFS_PATH, TEMP_PATH, target,
         extra_packages=extra_packages,
         cache_policy=plan.cache_policy,
         extra_groups=extra_groups,
         cache_dir=Path(_cache_dir) if _cache_dir else None,
+        groups_override=_groups_override,
     ).bootstrap()
 
-    # Настройка контейнера
+    # Общая настройка rootfs
     setup.setup_directories(ROOTFS_PATH)
     setup.write_base_configs(ROOTFS_PATH, hostname=NETOS_HOSTNAME)
-    setup.setup_network(ROOTFS_PATH)
-    setup.install_boot_diagnostics(ROOTFS_PATH)
     setup.create_dev_nodes(ROOTFS_PATH)
     linux_kernel.install_kernel()
-    setup.install_webui_assets(ROOTFS_PATH)
-    setup.install_nervum_assets(ROOTFS_PATH)
-    setup.install_ovsdb_assets(
-        ROOTFS_PATH,
-        SCHEMA_PATH,
-        NET_AGENT_PATH,
-        storage_agent=STORAGE_AGENT_PATH,
-        vm_agent=VM_AGENT_PATH,
-        stat_agent=STAT_AGENT_PATH,
-        cli_tool=CLI_PATH,
-    )
+
+    if _is_tinywifi():
+        # TinyWifi AP appliance — минимальный образ без OVS/Testum/nervum
+        logging_adapter.info("Appliance: TinyWifi — устанавливаем AP конфигурацию")
+        TinyWifiSetup().install(ROOTFS_PATH)
+    else:
+        # Стандартный netOS — полный стек OVS + Testum + nervum
+        setup.setup_network(ROOTFS_PATH)
+        setup.install_boot_diagnostics(ROOTFS_PATH)
+        setup.install_webui_assets(ROOTFS_PATH)
+        setup.install_nervum_assets(ROOTFS_PATH)
+        setup.install_ovsdb_assets(
+            ROOTFS_PATH,
+            SCHEMA_PATH,
+            NET_AGENT_PATH,
+            storage_agent=STORAGE_AGENT_PATH,
+            vm_agent=VM_AGENT_PATH,
+            stat_agent=STAT_AGENT_PATH,
+            cli_tool=CLI_PATH,
+        )
     _img_output_dir  = os.environ.get("NETOS_IMAGE_OUTPUT_DIR", "") or None
     _img_filename    = os.environ.get("NETOS_IMAGE_FILENAME", "") or None
     _img_path: Path | None = None

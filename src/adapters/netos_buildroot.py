@@ -64,12 +64,15 @@ class NetOSBuildrootBuilder:
         cache_policy: str = "",
         extra_groups: "list[str] | tuple[str, ...] | None" = None,
         cache_dir: "Path | None" = None,
+        groups_override: "list[str] | None" = None,
     ):
         self.rootfs_path = Path(rootfs_path)
         self.temp_path = Path(temp_path)
         self.target = target
         self.extra_packages: list[str] = list(extra_packages) if extra_packages else []
         self.extra_groups: list[str] = list(extra_groups) if extra_groups else []
+        # None → используем DEFAULT_GROUPS; [] → только extra_packages + target lines
+        self.groups_override: "list[str] | None" = groups_override
         # cache_policy: explicit arg > env var > default "use"
         self.cache_policy = (
             cache_policy
@@ -664,8 +667,9 @@ fi
         from netos_build.catalog import PackageCatalog, DEFAULT_GROUPS
         catalog = PackageCatalog.load()
 
-        # Base packages from catalog default groups
-        package_lines: list[str] = catalog.resolve_groups(list(DEFAULT_GROUPS))
+        # groups_override=None → DEFAULT_GROUPS; [] → только extra_packages + target
+        base_groups = self.groups_override if self.groups_override is not None else list(DEFAULT_GROUPS)
+        package_lines: list[str] = catalog.resolve_groups(base_groups) if base_groups else []
 
         # Extra groups requested via --groups CLI flag (stored in extra_groups)
         if self.extra_groups:
