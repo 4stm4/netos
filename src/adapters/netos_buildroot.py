@@ -1,5 +1,7 @@
+import collections
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -717,6 +719,9 @@ fi
                 'BR2_SYSTEM_DHCP="eth0"',
                 'BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_NETOS_PATH)/board/4stm4/netos/rootfs_overlay"',
                 'BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_NETOS_PATH)/board/4stm4/netos/post-build.sh"',
+                # Увеличиваем read-timeout: по умолчанию wget не имеет таймаута на чтение
+                # и может висеть часами на медленном/обрывистом соединении.
+                'BR2_WGET="wget -nd --passive-ftp -t 3 --connect-timeout=20 --read-timeout=300"',
                 *package_lines,
                 "",
             ]
@@ -799,9 +804,45 @@ fi
         jobs = os.environ.get("NETOS_BUILD_JOBS", str(os.cpu_count() or 1))
         logging.info("Building 4stm4 netOS rootfs with Buildroot (-j%s)", jobs)
         self._clear_target_os_release_links()
-        subprocess.run(
-            ["make", "-C", str(self.buildroot_dir), f"O={self.output_dir}", f"-j{jobs}"],
-            check=True,
+
+        cmd = ["make", "-C", str(self.buildroot_dir), f"O={self.output_dir}", f"-j{jobs}"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        assert proc.stdout is not None
+
+        tail: collections.deque[str] = collections.deque(maxlen=80)
+        current_pkg = ""
+        had_download = False
+
+        for raw in proc.stdout:
+            line = raw.rstrip("\n")
+            print(line, flush=True)
+            tail.append(line)
+            m = re.match(r">>> (\S+)", line)
+            if m:
+                current_pkg = m.group(1)
+            if "Downloading" in line:
+                had_download = True
+
+        proc.wait()
+        if proc.returncode == 0:
+            return
+
+        tail_lines = list(tail)
+
+        if had_download and any(
+            "Giving up" in l or "404 Not Found" in l for l in tail_lines
+        ):
+            pkg_hint = f" [{current_pkg}]" if current_pkg else ""
+            raise RuntimeError(
+                f"Buildroot: не удалось скачать пакет{pkg_hint} — сетевая ошибка.\n"
+                "  Все зеркала недоступны или вернули 404. Проверь интернет на сервере сборки\n"
+                "  и перезапусти сборку."
+            )
+
+        err_lines = [l for l in tail_lines if "*** [" in l or ": error:" in l]
+        hint = ("\n  " + "\n  ".join(err_lines[-5:])) if err_lines else " Смотри лог выше."
+        raise RuntimeError(
+            f"Buildroot завершился с ошибкой (код {proc.returncode}).{hint}"
         )
 
     def _clear_target_os_release_links(self):

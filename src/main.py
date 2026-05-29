@@ -14,6 +14,7 @@ import argparse
 import os
 from pathlib import Path
 import platform
+import subprocess
 import sys
 
 
@@ -247,14 +248,22 @@ if __name__ == "__main__":
     # Для TinyWifi используем только группу tinywifi вместо DEFAULT_GROUPS
     _groups_override = ["tinywifi"] if _is_tinywifi() else None
 
-    NetOSBuildrootBuilder(
-        ROOTFS_PATH, TEMP_PATH, target,
-        extra_packages=extra_packages,
-        cache_policy=plan.cache_policy,
-        extra_groups=extra_groups,
-        cache_dir=Path(_cache_dir) if _cache_dir else None,
-        groups_override=_groups_override,
-    ).bootstrap()
+    try:
+        NetOSBuildrootBuilder(
+            ROOTFS_PATH, TEMP_PATH, target,
+            extra_packages=extra_packages,
+            cache_policy=plan.cache_policy,
+            extra_groups=extra_groups,
+            cache_dir=Path(_cache_dir) if _cache_dir else None,
+            groups_override=_groups_override,
+        ).bootstrap()
+    except RuntimeError as exc:
+        logging_adapter.error("=== СБОРКА УПАЛА ===\n%s", exc)
+        sys.exit(1)
+    except subprocess.CalledProcessError as exc:
+        logging_adapter.error("=== СБОРКА УПАЛА === команда завершилась с кодом %d:\n  %s",
+                              exc.returncode, " ".join(str(a) for a in exc.cmd))
+        sys.exit(1)
 
     # Общая настройка rootfs
     setup.setup_directories(ROOTFS_PATH)
