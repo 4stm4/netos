@@ -1083,18 +1083,10 @@ fi
         if not rootfs_tar.exists():
             raise FileNotFoundError(f"Buildroot rootfs archive not found: {rootfs_tar}")
         logging.info("Extracting Buildroot rootfs into %s", self.rootfs_path)
-        # Device nodes and setuid bits require root to extract correctly.
-        # Try fakeroot first (preserves metadata without real root), fall back to sudo.
-        if shutil.which("fakeroot"):
-            subprocess.run(
-                ["fakeroot", "tar", "-xf", str(rootfs_tar), "-C", str(self.rootfs_path)],
-                check=True,
-            )
-        else:
-            logging.warning(
-                "fakeroot not found; falling back to sudo tar for device node extraction"
-            )
-            subprocess.run(
-                ["sudo", "tar", "-xf", str(rootfs_tar), "-C", str(self.rootfs_path)],
-                check=True,
-            )
+        # sudo tar is required to correctly restore device nodes (char/block) and
+        # setuid bits. fakeroot only simulates root in userspace and cannot create
+        # real device nodes on the host filesystem.
+        subprocess.run(
+            ["sudo", "tar", "-xf", str(rootfs_tar), "-C", str(self.rootfs_path)],
+            check=True,
+        )
