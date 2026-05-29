@@ -108,6 +108,18 @@ def get_build(build_id: str) -> BuildState | None:
     return _builds.get(build_id)
 
 
+def delete_build(build_id: str) -> bool:
+    state = _builds.pop(build_id, None)
+    if state is None:
+        return False
+    if state.status == "running":
+        _builds[build_id] = state  # не удаляем запущенную сборку
+        return False
+    (BUILDS_DIR / f"{build_id}.json").unlink(missing_ok=True)
+    (BUILDS_DIR / f"{build_id}.log").unlink(missing_ok=True)
+    return True
+
+
 def list_builds() -> list[dict]:
     result = []
     for b in sorted(_builds.values(), key=lambda b: b.started_at, reverse=True):

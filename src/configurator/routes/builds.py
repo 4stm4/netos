@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from src.configurator.build_runner import (
+    delete_build,
     get_build,
     list_builds,
     start_build,
@@ -68,6 +69,13 @@ async def start_build_inline(profile_data: dict[str, Any]) -> dict[str, str]:
         extra_packages=extra,
     )
     return {"build_id": build_id, "target": profile.target}
+
+
+@router.delete("/builds/{build_id}")
+def delete_build_endpoint(build_id: str) -> dict[str, str]:
+    if not delete_build(build_id):
+        raise HTTPException(status_code=400, detail="Build not found or still running")
+    return {"deleted": build_id}
 
 
 @router.get("/builds/{build_id}/events")
