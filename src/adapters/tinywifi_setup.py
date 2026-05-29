@@ -163,10 +163,18 @@ case "$1" in
 start)
     printf 'Starting TinyWifi: '
 
-    # wlan0 — IP точки доступа
-    ip link set {AP_IFACE} up
-    ip addr flush dev {AP_IFACE}
-    ip addr add {AP_IP}/24 dev {AP_IFACE}
+    # Ждём появления wlan0 (brcmfmac инициализируется асинхронно)
+    for i in $(seq 1 15); do
+        ip link show {AP_IFACE} >/dev/null 2>&1 && break
+        sleep 1
+    done
+    if ! ip link show {AP_IFACE} >/dev/null 2>&1; then
+        echo "ERROR: {AP_IFACE} not found after 15s" >&2
+        exit 1
+    fi
+
+    # Устанавливаем regulatory domain до поднятия AP
+    command -v iw >/dev/null 2>&1 && iw reg set {AP_COUNTRY} 2>/dev/null || true
 
     # IP forwarding (NAT)
     echo 1 > /proc/sys/net/ipv4/ip_forward
@@ -176,10 +184,14 @@ start)
         nft -f "$NFT_CONF" || true
     fi
 
-    # hostapd — Wi-Fi AP
+    # hostapd — поднимает AP и управляет wlan0
     if command -v hostapd >/dev/null 2>&1 && [ -f "$HOSTAPD_CONF" ]; then
-        hostapd -B "$HOSTAPD_CONF" -P /run/hostapd.pid || true
+        hostapd -B "$HOSTAPD_CONF" -P /run/hostapd.pid
     fi
+
+    # IP на wlan0 после того как hostapd поднял AP
+    ip addr flush dev {AP_IFACE}
+    ip addr add {AP_IP}/24 dev {AP_IFACE}
 
     # nanodhcp — DHCP для клиентов AP
     mkdir -p /var/lib/nanodhcp
