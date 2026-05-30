@@ -153,15 +153,26 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_HWMON=n",
     # Non-brcmfmac wireless drivers — Pi Zero 2W only has BCM43436
     "CONFIG_ATH_COMMON=n",
+    "CONFIG_ATH9K=n",
+    "CONFIG_ATH9K_HTC=n",
     "CONFIG_RT2X00=n",
     "CONFIG_IWLWIFI=n",
     "CONFIG_MEDIATEK_MT76=n",
+    "CONFIG_MT7601U=n",       # legacy MediaTek driver, separate from mt76
     "CONFIG_WL18XX=n",
     "CONFIG_MWIFIEX=n",
     "CONFIG_MWL8K=n",
     "CONFIG_B43=n",
     "CONFIG_B43LEGACY=n",
     "CONFIG_BRCMSMAC=n",
+    # Filesystems seen still compiling — not needed on SD-card AP
+    "CONFIG_NTFS_FS=n",       # legacy NTFS driver
+    "CONFIG_NTFS3_FS=n",      # modern NTFS3 driver
+    "CONFIG_UDF_FS=n",        # optical disc filesystem
+    "CONFIG_REISERFS_FS=n",   # legacy ReiserFS
+    "CONFIG_DLM=n",           # distributed lock manager (cluster FS)
+    # Amateur radio — no ham radio on this device
+    "CONFIG_HAMRADIO=n",
     # Pi Zero 2W has no built-in Ethernet (only WiFi + USB-OTG)
     "CONFIG_ETHERNET=n",
 )
