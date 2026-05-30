@@ -103,6 +103,67 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_HID_GENERIC=y",
     "CONFIG_INPUT_EVDEV=y",
     "CONFIG_UHID=y",
+    # ---- Slim kernel for headless WiFi AP router ----
+    # No sound — saves ~7 MB of modules
+    "CONFIG_SOUND=n",
+    "CONFIG_SND=n",
+    # No media/DVB/cameras/FM-radio — saves ~14 MB of modules
+    "CONFIG_MEDIA_SUPPORT=n",
+    "CONFIG_VIDEO_DEV=n",
+    "CONFIG_RC_CORE=n",
+    # No display/GPU — headless router
+    "CONFIG_DRM=n",
+    "CONFIG_FB=n",
+    "CONFIG_BACKLIGHT_LCD_SUPPORT=n",
+    # No RAID/LVM/multipath — single SD card
+    "CONFIG_MD=n",
+    "CONFIG_DM_MULTIPATH=n",
+    # No industrial I/O or 1-wire sensors
+    "CONFIG_IIO=n",
+    "CONFIG_W1=n",
+    # No joystick/gameport (keep INPUT_EVDEV + UHID for BT keyboard)
+    "CONFIG_GAMEPORT=n",
+    "CONFIG_INPUT_JOYSTICK=n",
+    "CONFIG_INPUT_TOUCHSCREEN=n",
+    "CONFIG_INPUT_TABLET=n",
+    # Exotic filesystems not needed on SD-card router — saves ~13 MB
+    "CONFIG_XFS_FS=n",
+    "CONFIG_BTRFS_FS=n",
+    "CONFIG_OCFS2_FS=n",
+    "CONFIG_GFS2_FS=n",
+    "CONFIG_CEPH_FS=n",
+    "CONFIG_UBIFS_FS=n",
+    "CONFIG_NFS_FS=n",
+    "CONFIG_NFSD=n",
+    "CONFIG_CIFS=n",
+    "CONFIG_SMB_SERVER=n",
+    # Network protocols not used in AP mode
+    "CONFIG_ATM=n",
+    "CONFIG_DECNET=n",
+    "CONFIG_IPX=n",
+    "CONFIG_APPLETALK=n",
+    "CONFIG_CAN=n",
+    "CONFIG_BATMAN_ADV=n",
+    "CONFIG_SCTP=n",
+    # OVS not needed on TinyWifi AP
+    "CONFIG_OPENVSWITCH=n",
+    # Staging drivers
+    "CONFIG_STAGING=n",
+    # Hardware monitoring — no sensors on this board
+    "CONFIG_HWMON=n",
+    # Non-brcmfmac wireless drivers — Pi Zero 2W only has BCM43436
+    "CONFIG_ATH_COMMON=n",
+    "CONFIG_RT2X00=n",
+    "CONFIG_IWLWIFI=n",
+    "CONFIG_MEDIATEK_MT76=n",
+    "CONFIG_WL18XX=n",
+    "CONFIG_MWIFIEX=n",
+    "CONFIG_MWL8K=n",
+    "CONFIG_B43=n",
+    "CONFIG_B43LEGACY=n",
+    "CONFIG_BRCMSMAC=n",
+    # Pi Zero 2W has no built-in Ethernet (only WiFi + USB-OTG)
+    "CONFIG_ETHERNET=n",
 )
 
 
@@ -219,7 +280,7 @@ TARGETS = {
         install_boot_files=True,
         kernel_config_options=ZERO2W_KERNEL_OPTIONS,
         build_kernel_modules=True,
-        image_size_mb=512,
+        image_size_mb=256,
         boot_size_mb=64,
     ),
     "pi4": TargetConfig(
