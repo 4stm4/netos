@@ -155,6 +155,11 @@ groups:
       - BR2_PACKAGE_E2FSPROGS=y
       - BR2_TARGET_ROOTFS_TAR=y
       - BR2_TARGET_ROOTFS_TAR_NONE=y
+      # SIM800C USB GSM modem — AT commands + PPP for GPRS data
+      - BR2_PACKAGE_PPP=y
+      # Bluetooth keyboard — bluez5 stack for BCM43436 UART HCI
+      - BR2_PACKAGE_BLUEZ5_UTILS=y
+      - BR2_PACKAGE_BLUEZ5_UTILS_CLIENT=y
 
   mininet:
     description: "Mininet network manager — interface config, DHCP server (opt-in, QEMU x86)"
