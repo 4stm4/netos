@@ -294,9 +294,9 @@ if __name__ == "__main__":
     _img_filename    = os.environ.get("NETOS_IMAGE_FILENAME", "") or None
     _base = Path(_img_output_dir) if _img_output_dir else PROJECT_ROOT
     if not _img_filename:
-        from datetime import date
+        from datetime import datetime
         _appliance = os.environ.get("NETOS_APPLIANCE", "").lower() or "netos"
-        _img_filename = f"{_appliance}-{target.name}-{date.today().strftime('%y%m%d')}.img"
+        _img_filename = f"{_appliance}-{target.name}-{datetime.now().strftime('%y%m%d-%H%M')}.img"
     _img_path = _base / _img_filename
     _produce_qcow2 = (plan.image_format == "qcow2")
     try:
