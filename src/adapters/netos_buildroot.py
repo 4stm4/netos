@@ -825,10 +825,21 @@ fi
         target_dir = self.output_dir / "target"
         if target_dir.exists():
             shutil.rmtree(target_dir)
+        # Remove .stamp_target_installed for non-toolchain packages so Buildroot
+        # reinstalls them into the fresh target dir.  Toolchain stamps (gcc, glibc,
+        # binutils…) must NOT be deleted — their install step requires build artifacts
+        # that may not survive a partial clean and would trigger a 45-min GCC rebuild.
+        _TOOLCHAIN_PREFIXES = (
+            "gcc-", "host-gcc-", "binutils-", "host-binutils-",
+            "glibc-", "musl-", "uclibc-",
+            "toolchain-buildroot", "toolchain-buildroot-aux",
+            "toolchain-buildroot-initial",
+        )
         build_dir = self.output_dir / "build"
         if build_dir.exists():
             for stamp in build_dir.glob("*/.stamp_target_installed"):
-                stamp.unlink()
+                if not any(stamp.parent.name.startswith(p) for p in _TOOLCHAIN_PREFIXES):
+                    stamp.unlink()
         hash_file.write_text(current_hash)
 
     def _build_rootfs(self):
