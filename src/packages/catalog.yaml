@@ -162,6 +162,15 @@ groups:
       - BR2_PACKAGE_BLUEZ5_UTILS_CLIENT=y
       # btattach (UART HCI init) lives in the "tools" set (bluemoon, btattach, hex2hcd…)
       - BR2_PACKAGE_BLUEZ5_UTILS_TOOLS=y
+      # HID profile plugins — REQUIRED for a paired Bluetooth keyboard/mouse to
+      # become an input device.  Without these bluetoothd completes pairing but
+      # never opens the HID channel, so nothing shows up in
+      # /proc/bus/input/devices (the kernel side — BT_HIDP/UHID/HID/EVDEV — is
+      # already enabled in the zero2w kernel config).
+      #   HID = classic BR/EDR HID keyboards   (kernel CONFIG_BT_HIDP)
+      #   HOG = HID-over-GATT for BLE keyboards (kernel CONFIG_UHID)
+      - BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_HID=y
+      - BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_HOG=y
 
   mininet:
     description: "Mininet network manager — interface config, DHCP server (opt-in, QEMU x86)"
