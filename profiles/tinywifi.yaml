@@ -14,5 +14,5 @@ network:
     country: US
     bootstrap: false
 image:
-  size_mb: 1024
-  boot_mb: 256
+  size_mb: 192
+  boot_mb: 48
