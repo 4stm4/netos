@@ -71,8 +71,10 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_WIRELESS=y",
     "CONFIG_CFG80211=y",
     "CONFIG_MAC80211=y",
-    "CONFIG_BRCMUTIL=m",
-    "CONFIG_BRCMFMAC=m",
+    # WiFi built-in (=y) so the AP no longer depends on modprobe ordering /
+    # module load success — one fewer failure mode during bring-up.
+    "CONFIG_BRCMUTIL=y",
+    "CONFIG_BRCMFMAC=y",
     "CONFIG_BRCMFMAC_SDIO=y",
     "CONFIG_MODULES=y",
     "CONFIG_MODULE_UNLOAD=y",
@@ -111,10 +113,14 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_MEDIA_SUPPORT=n",
     "CONFIG_VIDEO_DEV=n",
     "CONFIG_RC_CORE=n",
-    # No display/GPU — headless router
-    "CONFIG_DRM=n",
-    "CONFIG_FB=n",
-    "CONFIG_BACKLIGHT_LCD_SUPPORT=n",
+    # Framebuffer console on HDMI so the kernel boot log / panic is visible
+    # during hardware bring-up. No initramfs here, so the display driver must
+    # be built-in (=y) to paint the console at boot — vc4 KMS + fbcon.
+    "CONFIG_DRM=y",
+    "CONFIG_DRM_VC4=y",
+    "CONFIG_DRM_FBDEV_EMULATION=y",
+    "CONFIG_FB=y",
+    "CONFIG_FRAMEBUFFER_CONSOLE=y",
     # No RAID/LVM/multipath — single SD card
     "CONFIG_MD=n",
     "CONFIG_DM_MULTIPATH=n",
@@ -257,6 +263,8 @@ TARGETS = {
             "os_check=0",
             "uart_2ndstage=1",
             "dtdebug=1",
+            "dtoverlay=vc4-kms-v3d",
+            "max_framebuffers=2",
         ),
         boot_cmdline=(
             "console=serial0,115200 console=tty1 "
