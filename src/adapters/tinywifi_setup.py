@@ -49,6 +49,7 @@ class TinyWifiSetup:
         self._nanodhcp_conf(root)
         self._tinywifi_conf(root)
         self._www_index(root)
+        self._bluetooth_conf(root)
         self._disable_conflicting_inits(root)
 
     # ------------------------------------------------------------------
@@ -62,6 +63,7 @@ class TinyWifiSetup:
             "etc/nftables",
             "etc/nanodhcp",
             "etc/tinywifi",
+            "etc/bluetooth",
             "etc/profile.d",
             "www",
             "var/lib/nanodhcp",
@@ -150,7 +152,8 @@ fi
 
         self._write_exec(d / "S02modules", f"""\
 #!/bin/sh
-for mod in brcmfmac cfg80211 mac80211 nf_tables nft_masq nf_nat nf_conntrack; do
+for mod in brcmfmac cfg80211 mac80211 nf_tables nft_masq nf_nat nf_conntrack \
+           usb_serial cp210x ch341 cdc_acm ppp_async ppp_deflate; do
     modprobe "$mod" 2>/dev/null || true
 done
 """)
@@ -341,6 +344,63 @@ esac
             f"pool_end = \"{AP_POOL_END}\"\n"
             f"lease_time = 86400\n"
         )
+
+    # ------------------------------------------------------------------
+    # Bluetooth — S04bluetooth init + /etc/bluetooth/main.conf
+    # ------------------------------------------------------------------
+
+    def _bluetooth_conf(self, root: Path) -> None:
+        # bluez5 main.conf — minimal, no agent by default
+        (root / "etc" / "bluetooth" / "main.conf").write_text(
+            "[Policy]\n"
+            "AutoEnable=true\n\n"
+            "[General]\n"
+            "Name=TinyWifi\n"
+            "Class=0x000100\n"
+            "DiscoverableTimeout=0\n"
+        )
+
+        self._write_exec(root / "etc" / "init.d" / "S04bluetooth", """\
+#!/bin/sh
+# S04bluetooth — init BCM43436 Bluetooth on Pi Zero 2W
+# btattach loads firmware via UART and creates hci0; bluetoothd handles pairing.
+BT_UART=/dev/ttyAMA0
+BT_SPEED=3000000
+
+case "$1" in
+start)
+    printf 'Starting Bluetooth: '
+    # Attach BCM UART HCI (loads firmware, creates hci0)
+    btattach -B "$BT_UART" -P bcm -S "$BT_SPEED" &
+    echo $! > /run/btattach.pid
+    sleep 2
+    # Bring hci0 up
+    hciconfig hci0 up 2>/dev/null || true
+    # Start bluetoothd for pairing support
+    if command -v bluetoothd >/dev/null 2>&1; then
+        bluetoothd --noplugin=* &
+        echo $! > /run/bluetoothd.pid
+    fi
+    echo 'OK'
+    ;;
+stop)
+    printf 'Stopping Bluetooth: '
+    [ -f /run/bluetoothd.pid ] && kill "$(cat /run/bluetoothd.pid)" 2>/dev/null || true
+    [ -f /run/btattach.pid ]   && kill "$(cat /run/btattach.pid)"   2>/dev/null || true
+    hciconfig hci0 down 2>/dev/null || true
+    echo 'OK'
+    ;;
+restart)
+    "$0" stop; sleep 1; "$0" start
+    ;;
+status)
+    hciconfig hci0 2>/dev/null || echo 'hci0 not found'
+    ;;
+*)
+    echo "Usage: $0 {start|stop|restart|status}"
+    exit 1
+esac
+""")
 
     # ------------------------------------------------------------------
     # /www/index.html

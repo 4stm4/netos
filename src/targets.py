@@ -80,6 +80,29 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     # rootfs kmod is built without liblzma, so .ko.xz modules fail to load.
     "CONFIG_MODULE_COMPRESS_XZ=n",
     "CONFIG_MODULE_COMPRESS_NONE=y",
+    # SIM800C USB GSM dongle — support CP2102, CH340 and CDC-ACM bridges
+    "CONFIG_USB_SERIAL=y",
+    "CONFIG_USB_SERIAL_CP210X=y",
+    "CONFIG_USB_SERIAL_CH341=y",
+    "CONFIG_USB_ACM=y",
+    # PPP for GPRS data over the modem
+    "CONFIG_PPP=y",
+    "CONFIG_PPP_ASYNC=y",
+    "CONFIG_PPP_DEFLATE=y",
+    "CONFIG_PPP_BSDCOMP=y",
+    # Bluetooth — BCM43436 on Pi Zero 2W (UART-based HCI)
+    "CONFIG_BT=y",
+    "CONFIG_BT_RFCOMM=y",
+    "CONFIG_BT_RFCOMM_TTY=y",
+    "CONFIG_BT_BNEP=y",
+    "CONFIG_BT_HIDP=y",
+    "CONFIG_BT_HCIUART=y",
+    "CONFIG_BT_HCIUART_BCM=y",
+    # HID input for BT keyboard
+    "CONFIG_HID=y",
+    "CONFIG_HID_GENERIC=y",
+    "CONFIG_INPUT_EVDEV=y",
+    "CONFIG_UHID=y",
 )
 
 
