@@ -212,6 +212,16 @@ unit: sectors
         print("Копируем rootfs...")
         run(["cp", "-a", str(CONTAINER_PATH) + "/.", str(ROOTFS_MNT)], use_sudo=True)
 
+        # /boot on the rootfs is a duplicate of the FAT boot partition — the Pi
+        # bootloader reads exclusively from the FAT partition and never touches the
+        # ext4 rootfs /boot.  Remove it to recover ~25-30 MB on hardware targets.
+        if target.install_boot_files:
+            rootfs_boot = ROOTFS_MNT / "boot"
+            if rootfs_boot.exists():
+                run(["rm", "-rf", str(rootfs_boot)], use_sudo=True)
+                run(["mkdir", "-p", str(rootfs_boot)], use_sudo=True)
+                print("Удалён дубликат /boot с rootfs-партиции (~30 MB сэкономлено)")
+
         print("Копируем boot-файлы...")
         if target.install_boot_files:
             CONFIG_TXT.write_text(_boot_config_text(target))
