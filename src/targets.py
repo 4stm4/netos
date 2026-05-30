@@ -192,8 +192,8 @@ TARGETS = {
         install_boot_files=True,
         kernel_config_options=ZERO2W_KERNEL_OPTIONS,
         build_kernel_modules=True,
-        image_size_mb=1024,
-        boot_size_mb=256,
+        image_size_mb=512,
+        boot_size_mb=64,
     ),
     "pi4": TargetConfig(
         name="pi4",

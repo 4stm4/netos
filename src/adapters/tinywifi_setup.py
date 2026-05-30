@@ -130,6 +130,24 @@ if command -v mdev >/dev/null 2>&1; then
 fi
 """)
 
+        self._write_exec(d / "S05expand", """\
+#!/bin/sh
+# Expand rootfs partition to fill SD card on first boot.
+PART_DONE=/var/lib/tinywifi/.partition_resized
+FS_DONE=/var/lib/tinywifi/.rootfs_expanded
+
+if [ ! -f "$PART_DONE" ]; then
+    printf 'Expanding partition: '
+    parted -s /dev/mmcblk0 resizepart 2 100% 2>/dev/null && touch "$PART_DONE" && echo OK || echo SKIP
+fi
+
+if [ -f "$PART_DONE" ] && [ ! -f "$FS_DONE" ]; then
+    printf 'Expanding filesystem: '
+    partprobe /dev/mmcblk0 2>/dev/null || true
+    resize2fs /dev/mmcblk0p2 2>/dev/null && touch "$FS_DONE" && echo OK || echo 'retry next boot'
+fi
+""")
+
         self._write_exec(d / "S02modules", f"""\
 #!/bin/sh
 for mod in brcmfmac cfg80211 mac80211 nf_tables nft_masq nf_nat nf_conntrack; do
