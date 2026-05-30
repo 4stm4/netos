@@ -160,6 +160,8 @@ groups:
       # Bluetooth keyboard — bluez5 stack for BCM43436 UART HCI
       - BR2_PACKAGE_BLUEZ5_UTILS=y
       - BR2_PACKAGE_BLUEZ5_UTILS_CLIENT=y
+      # btattach (UART HCI init) is in the experimental tools set
+      - BR2_PACKAGE_BLUEZ5_UTILS_EXPERIMENTAL=y
 
   mininet:
     description: "Mininet network manager — interface config, DHCP server (opt-in, QEMU x86)"

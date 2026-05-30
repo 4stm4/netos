@@ -800,9 +800,41 @@ fi
             check=True,
         )
 
+    _ROOTFS_DEFCONFIG_HASH_FILE = ".last_rootfs_defconfig_hash"
+
+    def _rootfs_defconfig_hash(self) -> str:
+        import hashlib as _hashlib
+        return _hashlib.sha256(self._defconfig().encode()).hexdigest()[:16]
+
+    def _clean_target_if_defconfig_changed(self) -> None:
+        """Remove output/target/ and install stamps when the package set changes.
+
+        Without this, switching from a DEFAULT_GROUPS build to groups_override=["tinywifi"]
+        leaves python-web and other stale packages in output/target/ because Buildroot
+        make only adds packages, never removes ones dropped from the config.
+        """
+        hash_file = self.output_dir / self._ROOTFS_DEFCONFIG_HASH_FILE
+        current_hash = self._rootfs_defconfig_hash()
+        saved_hash = hash_file.read_text().strip() if hash_file.exists() else ""
+        if saved_hash == current_hash:
+            return
+        logging.info(
+            "Defconfig package set changed (%s → %s) — cleaning output/target/ to prevent stale packages",
+            saved_hash or "none", current_hash,
+        )
+        target_dir = self.output_dir / "target"
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+        build_dir = self.output_dir / "build"
+        if build_dir.exists():
+            for stamp in build_dir.glob("*/.stamp_target_installed"):
+                stamp.unlink()
+        hash_file.write_text(current_hash)
+
     def _build_rootfs(self):
         jobs = os.environ.get("NETOS_BUILD_JOBS", str(os.cpu_count() or 1))
         logging.info("Building 4stm4 netOS rootfs with Buildroot (-j%s)", jobs)
+        self._clean_target_if_defconfig_changed()
         self._clear_target_os_release_links()
 
         cmd = ["make", "-C", str(self.buildroot_dir), f"O={self.output_dir}", f"-j{jobs}"]
