@@ -825,27 +825,80 @@ fi
         target_dir = self.output_dir / "target"
         if target_dir.exists():
             shutil.rmtree(target_dir)
-        # Remove .stamp_target_installed for non-toolchain packages so Buildroot
-        # reinstalls them into the fresh target dir.  Toolchain stamps (gcc, glibc,
-        # binutils…) must NOT be deleted — their install step requires build artifacts
-        # that may not survive a partial clean and would trigger a 45-min GCC rebuild.
-        _TOOLCHAIN_PREFIXES = (
-            "gcc-", "host-gcc-", "binutils-", "host-binutils-",
-            "glibc-", "musl-", "uclibc-",
-            "toolchain-buildroot", "toolchain-buildroot-aux",
-            "toolchain-buildroot-initial",
-        )
+        # target/ was just wiped, so EVERY package — including the toolchain
+        # runtime (glibc → libc.so.6 + ld-linux-*.so.*, gcc → libgcc_s /
+        # libstdc++) — must re-run its install-target step to repopulate it.
+        # We delete only .stamp_target_installed, never .stamp_built /
+        # .stamp_configured, so this re-triggers the *cheap* copy step
+        # (copy_toolchain_lib_root copies a handful of .so files from the
+        # staging sysroot) — NOT a 45-min GCC rebuild: the build artifacts and
+        # staging sysroot are untouched, and host packages have no target stamp
+        # so they are unaffected.
+        #
+        # The previous version excluded glibc/gcc/toolchain-buildroot from this
+        # reset, which left libc.so.6 + ld-linux out of the fresh target →
+        # /bin/busybox (a dynamic PIE) could not be exec'd → kernel panic
+        # "No working init found" on every boot.
         build_dir = self.output_dir / "build"
         if build_dir.exists():
             for stamp in build_dir.glob("*/.stamp_target_installed"):
-                if not any(stamp.parent.name.startswith(p) for p in _TOOLCHAIN_PREFIXES):
-                    stamp.unlink()
+                stamp.unlink()
         hash_file.write_text(current_hash)
+
+    def _ensure_toolchain_libs_in_target(self) -> None:
+        """Guarantee the C library is staged for target/ before ``make``.
+
+        ``copy_toolchain_lib_root`` (glibc → libc.so.6 + ld-linux-*.so.*, gcc →
+        libgcc_s / libstdc++) is gated by each package's
+        ``.stamp_target_installed``.  If a previous run left those stamps set
+        while target/ ended up *without* the C library (stale toolchain cache,
+        an interrupted clean, or the historical exclusion bug above), ``make``
+        considers the copy done and ships a rootfs whose /bin/busybox cannot be
+        exec'd → kernel panic "No working init found".
+
+        This runs on every build (not just on defconfig change): it checks for
+        the loader + libc in target/ and, if missing, resets only the relevant
+        ``.stamp_target_installed`` so the next ``make`` re-copies the runtime.
+        No rebuild — build artifacts and the staging sysroot stay intact.
+        """
+        import glob as _glob
+
+        target_lib = self.output_dir / "target" / "lib"
+        loader = list(target_lib.glob("ld-linux-*.so.*")) if target_lib.exists() else []
+        # glibc → libc.so.6 ; musl → libc.so ; cover both flavours
+        libc_present = bool(loader) and target_lib.exists() and (
+            (target_lib / "libc.so.6").exists() or (target_lib / "libc.so").exists()
+        )
+        if libc_present:
+            return
+
+        build_dir = self.output_dir / "build"
+        if not build_dir.exists():
+            return
+        reset: list[str] = []
+        for pattern in (
+            "glibc-*", "musl-*", "uclibc-*",
+            "toolchain-buildroot", "toolchain-buildroot-aux",
+            "toolchain-buildroot-initial",
+        ):
+            for d in _glob.glob(str(build_dir / pattern)):
+                stamp = Path(d) / ".stamp_target_installed"
+                if stamp.exists():
+                    stamp.unlink()
+                    reset.append(Path(d).name)
+        if reset:
+            logging.warning(
+                "target/ is missing the C library (libc + ld-linux) — reset "
+                "target-install stamps so 'make' re-copies the toolchain "
+                "runtime: %s",
+                ", ".join(sorted(reset)),
+            )
 
     def _build_rootfs(self):
         jobs = os.environ.get("NETOS_BUILD_JOBS", str(os.cpu_count() or 1))
         logging.info("Building 4stm4 netOS rootfs with Buildroot (-j%s)", jobs)
         self._clean_target_if_defconfig_changed()
+        self._ensure_toolchain_libs_in_target()
         self._clear_target_os_release_links()
 
         cmd = ["make", "-C", str(self.buildroot_dir), f"O={self.output_dir}", f"-j{jobs}"]
@@ -1153,4 +1206,43 @@ fi
         subprocess.run(
             ["sudo", "chown", "-R", f"{getpass.getuser()}:", str(self.rootfs_path)],
             check=True,
+        )
+        self._verify_rootfs_has_libc()
+
+    def _verify_rootfs_has_libc(self) -> None:
+        """Fail the build if the extracted rootfs has no C library / loader.
+
+        netOS always uses a dynamic glibc toolchain (BR2_TOOLCHAIN_BUILDROOT_GLIBC,
+        and openvswitch forbids BR2_STATIC_LIBS), so /bin/busybox is a dynamic PIE
+        that needs the loader (ld-linux-*.so.*) + libc (libc.so.6) to exec.  If
+        they are absent the kernel panics "No working init found" at boot.
+        Catching it here turns a silent, un-bootable image (and a wasted flash)
+        into an explicit build failure naming the exact cause.
+        """
+        rootfs = self.rootfs_path
+        lib_dirs = [rootfs / "lib", rootfs / "usr" / "lib", rootfs / "lib64"]
+
+        def _present(globs: "tuple[str, ...]") -> bool:
+            for d in lib_dirs:
+                if d.exists() and any(any(d.glob(g)) for g in globs):
+                    return True
+            return False
+
+        has_loader = _present(("ld-linux-*.so.*", "ld-musl-*.so.*"))
+        has_libc = _present(("libc.so.6", "libc.so"))
+        if has_loader and has_libc:
+            return
+
+        missing = []
+        if not has_loader:
+            missing.append("dynamic loader (ld-linux-*.so.*)")
+        if not has_libc:
+            missing.append("C library (libc.so.6)")
+        raise RuntimeError(
+            "Rootfs is missing " + " and ".join(missing) + " — a dynamically "
+            "linked busybox/init cannot exec, so the kernel would panic "
+            "'No working init found' at boot.  Root cause is almost always a "
+            "skipped copy_toolchain_lib_root (stale .stamp_target_installed "
+            "after a target/ wipe).  Rebuild with cache_policy=refresh to "
+            "regenerate the rootfs."
         )
