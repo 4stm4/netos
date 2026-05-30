@@ -758,8 +758,8 @@ fi
             stamp_dir = build_dir / d
             if stamp_dir.exists():
                 shutil.rmtree(stamp_dir)
-        # host-gcc-final stamps that lock in --enable-languages
-        for gcc_dir in _glob.glob(str(build_dir / "host-gcc-final-*")):
+        # gcc-final stamps that lock in --enable-languages
+        for gcc_dir in _glob.glob(str(build_dir / "gcc-final-*")):
             for stamp in ["built", "configured", "host_installed", "installed",
                           "staging_installed", "target_installed"]:
                 p = Path(gcc_dir) / f".stamp_{stamp}"
@@ -893,6 +893,52 @@ fi
                 "runtime: %s",
                 ", ".join(sorted(reset)),
             )
+
+        # Also verify that the host toolchain has the C++ runtime.
+        # gcc-final's target-install copies libstdc++ from host/<triple>/lib*/.
+        # If it's absent (e.g. gcc was previously configured without C++), force
+        # a rebuild rather than letting `make` fail mid-run.
+        self._ensure_cxx_libs_in_host()
+
+    def _ensure_cxx_libs_in_host(self) -> None:
+        """Force gcc-final rebuild if libstdc++ is absent from host/<triple>/lib*.
+
+        gcc-final's target-install step copies libatomic, libgcc_s and libstdc++
+        from host/<triple>/lib*/ into target/.  If gcc was ever built without C++
+        (stale .stamp_configured, wrong --enable-languages at configure time, or a
+        bad toolchain cache) libstdc++ won't be there and the step fails with:
+          cp: cannot stat '.../lib*/libstdc++.so*': No such file or directory
+
+        Detecting the absence here and clearing the gcc-final stamps (so Buildroot
+        reconfigures gcc with BR2_TOOLCHAIN_BUILDROOT_CXX=y) is far better than
+        letting `make` fall over 30 min into a rootfs build.
+        """
+        triple = f"{self.target.buildroot_arch}-buildroot-linux-gnu"
+        host_triple = self.output_dir / "host" / triple
+        if not host_triple.exists():
+            return
+        lib_dirs = list(host_triple.glob("lib*"))
+        has_stdcxx = any(list(d.glob("libstdc++.so*")) for d in lib_dirs)
+        if has_stdcxx:
+            return
+        logging.warning(
+            "host/%s/lib*/ is missing libstdc++.so — gcc-final was built without "
+            "C++ support. Clearing gcc-final stamps to force a proper rebuild "
+            "with CXX=y (this adds ~30 min to the current build).",
+            triple,
+        )
+        self._clear_gcc_final_stamps()
+        # Invalidate any stale toolchain cache archive that also lacks libstdc++
+        try:
+            from netos_build.toolchain_cache import ToolchainCache
+            plan    = self._build_plan()
+            tc_cache = ToolchainCache(self._cache_root)
+            archive = tc_cache.archive_path(plan, BUILDROOT_VERSION)
+            if archive.exists():
+                archive.unlink()
+                logging.warning("Deleted incomplete toolchain cache: %s", archive.name)
+        except Exception as exc:
+            logging.debug("Could not check/delete toolchain cache: %s", exc)
 
     def _build_rootfs(self):
         jobs = os.environ.get("NETOS_BUILD_JOBS", str(os.cpu_count() or 1))
