@@ -24,11 +24,11 @@ BUILDROOT_SHA256 = os.environ.get(
 
 NANODHCP_VERSION = os.environ.get(
     "NETOS_NANODHCP_VERSION",
-    "26f545d605e7ebf3f19dbd0a95fdafc5a1e6c46c",
+    "ec0081fbf50185d90475a2ce929dbd93244a1ef9",
 )
 NANODHCP_SHA256 = os.environ.get(
     "NETOS_NANODHCP_SHA256",
-    "33f91a74c40828a4016579048b46dbd422d73426eababbacfba42aeac57cbceb",
+    "8570b6b3ed92a2d722c75fe6964eeefb42c5374ce8396ddb07b1fb1143ce9670",
 )
 
 _OPENVSWITCH_KNOWN_SHA256: dict[str, tuple[str, str]] = {
