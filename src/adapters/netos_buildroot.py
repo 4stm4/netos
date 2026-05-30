@@ -28,7 +28,7 @@ NANODHCP_VERSION = os.environ.get(
 )
 NANODHCP_SHA256 = os.environ.get(
     "NETOS_NANODHCP_SHA256",
-    "bb4906ac7d864939e3bb408a42caca0d5851884e721328ff31abec1868483164",
+    "33f91a74c40828a4016579048b46dbd422d73426eababbacfba42aeac57cbceb",
 )
 
 _OPENVSWITCH_KNOWN_SHA256: dict[str, tuple[str, str]] = {
