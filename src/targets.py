@@ -76,6 +76,10 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_BRCMFMAC_SDIO=y",
     "CONFIG_MODULES=y",
     "CONFIG_MODULE_UNLOAD=y",
+    # Ship uncompressed .ko: kernel has no CONFIG_MODULE_DECOMPRESS and the
+    # rootfs kmod is built without liblzma, so .ko.xz modules fail to load.
+    "CONFIG_MODULE_COMPRESS_XZ=n",
+    "CONFIG_MODULE_COMPRESS_NONE=y",
 )
 
 
