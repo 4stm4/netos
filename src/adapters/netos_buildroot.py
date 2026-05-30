@@ -896,9 +896,23 @@ fi
     def _build_plan(self):
         """Return a ResolvedBuildPlan for the current target (lazy import)."""
         from netos_build.plan import ResolvedBuildPlan
+        from netos_build.catalog import PackageCatalog, DEFAULT_GROUPS
+
+        # Mirror _defconfig() group resolution so the cache key covers the full
+        # package selection — otherwise different groups_override values (e.g.
+        # ["tinywifi"] vs DEFAULT_GROUPS) produce the same cache key and a fat
+        # full-build rootfs gets served to a slim TinyWifi build.
+        catalog = PackageCatalog.load()
+        base_groups = self.groups_override if self.groups_override is not None else list(DEFAULT_GROUPS)
+        group_pkgs: list[str] = catalog.resolve_groups(base_groups) if base_groups else []
+        if self.extra_groups:
+            for pkg in catalog.resolve_groups(list(self.extra_groups)):
+                if pkg not in group_pkgs:
+                    group_pkgs.append(pkg)
+
         return ResolvedBuildPlan.from_target(
             self.target,
-            extra_packages=self.extra_packages,
+            extra_packages=group_pkgs + list(self.extra_packages),
             cache_policy=self.cache_policy,
             external_hash=self._external_content_hash(),
         )
