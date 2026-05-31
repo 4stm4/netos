@@ -16,6 +16,8 @@ install_webui_assets / install_nervum_assets / install_ovsdb_assets.
 from __future__ import annotations
 
 import os
+import re
+import subprocess
 from pathlib import Path
 
 # Branding — переопределяется env-переменными из профиля
@@ -51,6 +53,7 @@ class TinyWifiSetup:
         self._www_index(root)
         self._bluetooth_conf(root)
         self._disable_conflicting_inits(root)
+        self._set_root_password(root)
 
     # ------------------------------------------------------------------
     # Directories
@@ -152,9 +155,16 @@ fi
 
         self._write_exec(d / "S02modules", f"""\
 #!/bin/sh
-for mod in brcmfmac cfg80211 mac80211 nf_tables nft_masq nf_nat nf_conntrack \
-           usb_serial cp210x ch341 cdc_acm ppp_async ppp_deflate; do
-    modprobe "$mod" 2>/dev/null || true
+# brcmfmac.ko (=m): загружаем через insmod, обходя modprobe/libcrypto зависимость.
+# К этому моменту rootfs уже примонтирован — firmware /lib/firmware/brcm/ доступна.
+mod=$(find /lib/modules -name "brcmfmac.ko" 2>/dev/null | head -1)
+if [ -n "$mod" ]; then
+    insmod "$mod" 2>/dev/null || true
+fi
+# Остальные модули (nftables, USB, PPP) — через modprobe; ошибки некритичны
+for m in nf_tables nft_masq nf_nat nf_conntrack \
+          usb_serial cp210x ch341 cdc_acm ppp_async ppp_deflate; do
+    modprobe "$m" 2>/dev/null || true
 done
 """)
 
@@ -184,21 +194,14 @@ case "$1" in
 start)
     printf 'Starting TinyWifi: '
 
-    # Ждём появления wlan0 (brcmfmac на BCM43436 может давать HT Avail timeout
-    # и восстанавливаться самостоятельно — даём 45с вместо 15с)
-    for i in $(seq 1 45); do
+    # brcmfmac загружен как модуль (S02modules insmod), firmware уже прогружена.
+    # Ждём появления wlan0 — обычно появляется через 1-3с после insmod.
+    for i in $(seq 1 15); do
         ip link show {AP_IFACE} >/dev/null 2>&1 && break
         sleep 1
     done
-    # Если всё ещё нет — пробуем rebind SDIO-драйвера и ждём ещё 10с
     if ! ip link show {AP_IFACE} >/dev/null 2>&1; then
-        echo -n "mmc1:0001:1" > /sys/bus/sdio/drivers/brcmfmac/unbind 2>/dev/null || true
-        sleep 2
-        echo -n "mmc1:0001:1" > /sys/bus/sdio/drivers/brcmfmac/bind   2>/dev/null || true
-        sleep 8
-    fi
-    if ! ip link show {AP_IFACE} >/dev/null 2>&1; then
-        echo "ERROR: {AP_IFACE} not found after 55s" >&2
+        echo "ERROR: {AP_IFACE} not found after 15s" >&2
         exit 1
     fi
 
@@ -445,6 +448,70 @@ esac
             f"</body>\n"
             f"</html>\n"
         )
+
+    # ------------------------------------------------------------------
+    # SSH — root password + ~/.ssh
+    # ------------------------------------------------------------------
+
+    def _set_root_password(self, root: Path) -> None:
+        """Устанавливает пароль root в /etc/shadow для dropbear SSH.
+
+        По умолчанию «tinywifi123» (переопределяется NETOS_SSH_PASSWORD).
+        Dropbear отклоняет пустой пароль — без этой правки SSH недоступен.
+        """
+        import logging
+        password = os.environ.get("NETOS_SSH_PASSWORD", "tinywifi123")
+
+        # Генерируем SHA-512 crypt-хэш через openssl
+        pw_hash: str | None = None
+        try:
+            res = subprocess.run(
+                ["openssl", "passwd", "-6", password],
+                capture_output=True, text=True, timeout=10,
+            )
+            if res.returncode == 0:
+                pw_hash = res.stdout.strip()
+        except Exception as exc:
+            logging.warning("openssl passwd failed: %s", exc)
+
+        if not pw_hash:
+            logging.warning("root SSH password not set (openssl unavailable)")
+            return
+
+        # Обновляем /etc/shadow
+        shadow_path = root / "etc" / "shadow"
+        lines = shadow_path.read_text().splitlines() if shadow_path.exists() else []
+        new_entry = f"root:{pw_hash}:19000:0:99999:7:::"
+        new_lines: list[str] = []
+        root_found = False
+        for line in lines:
+            if line.startswith("root:"):
+                new_lines.append(new_entry)
+                root_found = True
+            else:
+                new_lines.append(line)
+        if not root_found:
+            new_lines.insert(0, new_entry)
+        shadow_path.write_text("\n".join(new_lines) + "\n")
+        shadow_path.chmod(0o640)
+
+        # /etc/passwd — root должен иметь 'x' (пароль в shadow)
+        passwd_path = root / "etc" / "passwd"
+        if passwd_path.exists():
+            passwd_path.write_text(
+                re.sub(
+                    r"^(root:)[^:]*(:)",
+                    r"\1x\2",
+                    passwd_path.read_text(),
+                    count=1,
+                    flags=re.MULTILINE,
+                )
+            )
+
+        # /root/.ssh — нужна для key-based auth
+        ssh_dir = root / "root" / ".ssh"
+        ssh_dir.mkdir(parents=True, exist_ok=True)
+        ssh_dir.chmod(0o700)
 
     # ------------------------------------------------------------------
     # Нейтрализация конфликтующих init-скриптов из пакетов

@@ -71,10 +71,12 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_WIRELESS=y",
     "CONFIG_CFG80211=y",
     "CONFIG_MAC80211=y",
-    # WiFi built-in (=y) so the AP no longer depends on modprobe ordering /
-    # module load success — one fewer failure mode during bring-up.
+    # brcmfmac as a module (=m): driver loads AFTER rootfs is mounted, so
+    # firmware in /lib/firmware/brcm/ is accessible at probe time.
+    # Built-in (=y) caused error -2: driver probed at ~2.9s, rootfs at ~3.37s.
+    # cfg80211/mac80211/brcmutil stay built-in so brcmfmac.ko's symbols resolve.
     "CONFIG_BRCMUTIL=y",
-    "CONFIG_BRCMFMAC=y",
+    "CONFIG_BRCMFMAC=m",
     "CONFIG_BRCMFMAC_SDIO=y",
     "CONFIG_MODULES=y",
     "CONFIG_MODULE_UNLOAD=y",
