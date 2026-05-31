@@ -184,13 +184,21 @@ case "$1" in
 start)
     printf 'Starting TinyWifi: '
 
-    # Ждём появления wlan0 (brcmfmac инициализируется асинхронно)
-    for i in $(seq 1 15); do
+    # Ждём появления wlan0 (brcmfmac на BCM43436 может давать HT Avail timeout
+    # и восстанавливаться самостоятельно — даём 45с вместо 15с)
+    for i in $(seq 1 45); do
         ip link show {AP_IFACE} >/dev/null 2>&1 && break
         sleep 1
     done
+    # Если всё ещё нет — пробуем rebind SDIO-драйвера и ждём ещё 10с
     if ! ip link show {AP_IFACE} >/dev/null 2>&1; then
-        echo "ERROR: {AP_IFACE} not found after 15s" >&2
+        echo -n "mmc1:0001:1" > /sys/bus/sdio/drivers/brcmfmac/unbind 2>/dev/null || true
+        sleep 2
+        echo -n "mmc1:0001:1" > /sys/bus/sdio/drivers/brcmfmac/bind   2>/dev/null || true
+        sleep 8
+    fi
+    if ! ip link show {AP_IFACE} >/dev/null 2>&1; then
+        echo "ERROR: {AP_IFACE} not found after 55s" >&2
         exit 1
     fi
 
@@ -378,7 +386,7 @@ start)
     hciconfig hci0 up 2>/dev/null || true
     # Start bluetoothd for pairing support
     if command -v bluetoothd >/dev/null 2>&1; then
-        bluetoothd --noplugin=* &
+        bluetoothd &
         echo $! > /run/bluetoothd.pid
     fi
     echo 'OK'
