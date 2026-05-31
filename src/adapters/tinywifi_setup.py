@@ -378,9 +378,13 @@ BT_SPEED=3000000
 case "$1" in
 start)
     printf 'Starting Bluetooth: '
-    # Attach BCM UART HCI (loads firmware, creates hci0)
-    btattach -B "$BT_UART" -P bcm -S "$BT_SPEED" &
-    echo $! > /run/btattach.pid
+    # Attach BCM UART HCI (loads firmware, creates hci0) — only if UART exists
+    if [ -e "$BT_UART" ]; then
+        btattach -B "$BT_UART" -P bcm -S "$BT_SPEED" &
+        echo $! > /run/btattach.pid
+    else
+        echo "UART $BT_UART not found — skipping btattach (kernel may handle HCI)"
+    fi
     sleep 2
     # Bring hci0 up
     hciconfig hci0 up 2>/dev/null || true
@@ -454,7 +458,7 @@ esac
         S39wifi (NetworkAdapter) — не пишется в tinywifi-пути, но на всякий случай.
         """
         noop = "#!/bin/sh\n# managed by S10tinywifi\nexit 0\n"
-        for name in ("S10nanodhcp", "S39wifi"):
+        for name in ("S10nanodhcp", "S39wifi", "S40network", "S41nftables"):
             p = root / "etc" / "init.d" / name
             if p.exists():
                 p.write_text(noop)
