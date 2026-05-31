@@ -1,0 +1,18 @@
+name: tinywifi-qemu
+target: qemu-wifi
+appliance:
+  type: tinywifi
+branding:
+  name: 4stm4 TinyWifi (QEMU)
+  id: 4stm4-tinywifi-qemu
+  version: 0.1.0
+  hostname: tinywifi
+network:
+  wifi:
+    ssid: TinyWifi
+    psk: tinywifi123
+    country: US
+    bootstrap: false
+image:
+  size_mb: 512
+  boot_mb: 64

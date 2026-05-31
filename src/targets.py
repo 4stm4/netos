@@ -27,6 +27,34 @@ COMMON_KERNEL_OPTIONS = (
 )
 
 
+QEMU_WIFI_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
+    "CONFIG_KVM=n",
+    "CONFIG_VHOST_NET=n",
+    "CONFIG_VFIO=n",
+    "CONFIG_VFIO_PCI=n",
+    "CONFIG_PCI=y",
+    "CONFIG_PCI_HOST_GENERIC=y",
+    "CONFIG_VIRTIO=y",
+    "CONFIG_VIRTIO_PCI=y",
+    "CONFIG_VIRTIO_MMIO=y",
+    "CONFIG_VIRTIO_BLK=y",
+    "CONFIG_VIRTIO_NET=y",
+    "CONFIG_SERIAL_AMBA_PL011=y",
+    "CONFIG_SERIAL_AMBA_PL011_CONSOLE=y",
+    "CONFIG_RTC_DRV_PL031=y",
+    # WiFi simulation via mac80211_hwsim — для TinyWifi AP тестов в QEMU
+    "CONFIG_RFKILL=y",
+    "CONFIG_WIRELESS=y",
+    "CONFIG_CFG80211=y",
+    "CONFIG_MAC80211=y",
+    "CONFIG_MAC80211_HWSIM=m",  # виртуальный WiFi: создаёт wlan0, работает с hostapd/nl80211
+    "CONFIG_MODULES=y",
+    "CONFIG_MODULE_UNLOAD=y",
+    "CONFIG_MODULE_COMPRESS_XZ=n",
+    "CONFIG_MODULE_COMPRESS_NONE=y",
+)
+
+
 QEMU_VIRT_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_KVM=n",
     "CONFIG_VHOST_NET=n",
@@ -362,6 +390,33 @@ TARGETS = {
         buildroot_arch="x86_64",
         qemu_machine="q35",
         qemu_cpu="qemu64",
+        qemu_root_device="/dev/vda2",
+    ),
+    "qemu-wifi": TargetConfig(
+        name="qemu-wifi",
+        description="ARM64 QEMU virt + mac80211_hwsim — TinyWifi AP тест в эмуляторе без реального железа",
+        kernel_defconfig="defconfig",
+        kernel_filename="Image",
+        image_name="qemu-wifi.img",
+        boot_config_lines=(),
+        boot_cmdline=(
+            "console=ttyAMA0 root=/dev/vda2 rootfstype=ext4 rw rootwait"
+        ),
+        required_boot_files=(),
+        boot_firmware_files=(),
+        buildroot_package_lines=(
+            "BR2_PACKAGE_IW=y",
+            "BR2_PACKAGE_WIRELESS_TOOLS=y",
+            # Без RPi firmware — mac80211_hwsim не требует firmware-файлов
+        ),
+        install_boot_files=False,
+        kernel_config_options=QEMU_WIFI_KERNEL_OPTIONS,
+        build_kernel_modules=True,   # нужен mac80211_hwsim.ko
+        image_size_mb=512,
+        boot_size_mb=64,
+        kernel_source="mainline",
+        qemu_machine="virt",
+        qemu_cpu="cortex-a72",
         qemu_root_device="/dev/vda2",
     ),
     "qemu-virt": TargetConfig(

@@ -155,13 +155,15 @@ fi
 
         self._write_exec(d / "S02modules", f"""\
 #!/bin/sh
-# brcmfmac.ko (=m): загружаем через insmod, обходя modprobe/libcrypto зависимость.
-# К этому моменту rootfs уже примонтирован — firmware /lib/firmware/brcm/ доступна.
-mod=$(find /lib/modules -name "brcmfmac.ko" 2>/dev/null | head -1)
-if [ -n "$mod" ]; then
-    insmod "$mod" 2>/dev/null || true
-fi
-# Остальные модули (nftables, USB, PPP) — через modprobe; ошибки некритичны
+# WiFi драйвер — загружаем через insmod (обходит modprobe/libcrypto).
+# Ровно один из двух файлов будет найден в зависимости от платформы:
+#   zero2w:    brcmfmac.ko  (реальный BCM43436, firmware из /lib/firmware/brcm/)
+#   qemu-wifi: mac80211_hwsim.ko (виртуальный WiFi, без firmware)
+for wifi_mod in brcmfmac.ko mac80211_hwsim.ko; do
+    path=$(find /lib/modules -name "$wifi_mod" 2>/dev/null | head -1)
+    [ -n "$path" ] && insmod "$path" 2>/dev/null || true
+done
+# Сетевые фильтры, USB, PPP — через modprobe; ошибки некритичны
 for m in nf_tables nft_masq nf_nat nf_conntrack \
           usb_serial cp210x ch341 cdc_acm ppp_async ppp_deflate; do
     modprobe "$m" 2>/dev/null || true
