@@ -521,9 +521,18 @@ esac
             )
 
         # /root/.ssh — нужна для key-based auth
+        # Устанавливаем owner UID/GID=0 (root), потому что сборка может
+        # выполняться под непривилегированным пользователем, и dropbear
+        # откажется читать authorized_keys из директории, принадлежащей
+        # чужому UID.
         ssh_dir = root / "root" / ".ssh"
         ssh_dir.mkdir(parents=True, exist_ok=True)
         ssh_dir.chmod(0o700)
+        try:
+            os.chown(root / "root", 0, 0)
+            os.chown(ssh_dir, 0, 0)
+        except PermissionError:
+            pass  # В non-root build среде chown недоступен — продолжаем
 
     # ------------------------------------------------------------------
     # Нейтрализация конфликтующих init-скриптов из пакетов
