@@ -487,12 +487,21 @@ esac
 
     @staticmethod
     def _find_cargo() -> str | None:
-        """Ищет cargo: в PATH, ~/.cargo/bin/, /usr/bin/."""
-        for candidate in ("cargo", "/root/.cargo/bin/cargo",
-                          os.path.expanduser("~/.cargo/bin/cargo"), "/usr/bin/cargo"):
+        """Ищет cargo: в PATH, ~/.cargo/bin/, /home/codex/.cargo/bin/, /usr/bin/."""
+        candidates = [
+            "cargo",
+            "/root/.cargo/bin/cargo",
+            os.path.expanduser("~/.cargo/bin/cargo"),
+            "/home/codex/.cargo/bin/cargo",
+            "/usr/bin/cargo",
+            "/usr/local/bin/cargo",
+        ]
+        for candidate in candidates:
             try:
-                subprocess.run([candidate, "--version"], capture_output=True,
-                               check=True, timeout=5)
+                result = subprocess.run([candidate, "--version"], capture_output=True,
+                                        check=True, timeout=5)
+                logging.debug("cargo найден: %s (%s)", candidate,
+                              result.stdout.decode().strip())
                 return candidate
             except Exception:
                 continue
