@@ -380,23 +380,33 @@ esac
 BT_UART=/dev/ttyAMA0
 BT_SPEED=3000000
 
+# On QEMU virt, ttyAMA0 is the serial console — btattach at 3 Mbaud would
+# corrupt the console. Detect QEMU via virtio bus or device-tree compatible.
+_is_qemu() {
+    grep -q "QEMU\\|virt" /sys/firmware/devicetree/base/compatible 2>/dev/null || \\
+    [ -d /sys/bus/platform/devices/virtio-mmio.0 ] || \\
+    ls /sys/bus/virtio/devices/ 2>/dev/null | grep -q .
+}
+
 case "$1" in
 start)
     printf 'Starting Bluetooth: '
-    # Attach BCM UART HCI (loads firmware, creates hci0) — only if UART exists
-    if [ -e "$BT_UART" ]; then
+    if _is_qemu; then
+        echo "QEMU detected — skipping btattach (no real BCM chip)"
+    elif [ -e "$BT_UART" ]; then
+        # Attach BCM UART HCI (loads firmware, creates hci0)
         btattach -B "$BT_UART" -P bcm -S "$BT_SPEED" &
         echo $! > /run/btattach.pid
+        sleep 2
+        # Bring hci0 up
+        hciconfig hci0 up 2>/dev/null || true
+        # Start bluetoothd for pairing support
+        if command -v bluetoothd >/dev/null 2>&1; then
+            bluetoothd &
+            echo $! > /run/bluetoothd.pid
+        fi
     else
         echo "UART $BT_UART not found — skipping btattach (kernel may handle HCI)"
-    fi
-    sleep 2
-    # Bring hci0 up
-    hciconfig hci0 up 2>/dev/null || true
-    # Start bluetoothd for pairing support
-    if command -v bluetoothd >/dev/null 2>&1; then
-        bluetoothd &
-        echo $! > /run/bluetoothd.pid
     fi
     echo 'OK'
     ;;
