@@ -6,8 +6,9 @@ Writes all rootfs files for a minimal Wi-Fi AP appliance (zero2w target):
   /etc/hostapd/hostapd.conf
   /etc/nftables/tinywifi.nft
   /etc/nanodhcp/nanodhcp.conf
-  /etc/tinywifi/tinywifi.toml  (зарезервировано для CLI v0.2+)
-  /www/index.html
+  /etc/tinywifi/tinywifi.toml
+  /usr/sbin/tinywifi-web   (собирается из github.com/4stm4/tinyWiFi)
+  /etc/init.d/S20tinywifi-web
   runtime dirs: /var/lib/nanodhcp, /var/lib/tinywifi, /var/log, /run, /tmp
 
 Вызывается из main.py при NETOS_APPLIANCE=tinywifi вместо
@@ -15,8 +16,10 @@ install_webui_assets / install_nervum_assets / install_ovsdb_assets.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -50,7 +53,7 @@ class TinyWifiSetup:
         self._nftables_conf(root)
         self._nanodhcp_conf(root)
         self._tinywifi_conf(root)
-        self._www_index(root)
+        self._web_panel(root)   # tinywifi-web заменяет _www_index
         self._bluetooth_conf(root)
         self._disable_conflicting_inits(root)
         self._set_root_password(root)
@@ -340,23 +343,160 @@ esac
     # ------------------------------------------------------------------
 
     def _tinywifi_conf(self, root: Path) -> None:
+        """Конфиг для tinywifi-web (github.com/4stm4/tinyWiFi)."""
         (root / "etc" / "tinywifi" / "tinywifi.toml").write_text(
-            f"# /etc/tinywifi/tinywifi.toml — зарезервировано для tinywifi CLI (v0.2+)\n\n"
-            f"[ap]\n"
-            f"ssid = \"{AP_SSID}\"\n"
-            f"passphrase = \"{AP_PSK}\"\n"
-            f"country = \"{AP_COUNTRY}\"\n"
-            f"channel = {AP_CHANNEL}\n"
-            f"interface = \"{AP_IFACE}\"\n\n"
-            f"[network]\n"
-            f"ap_ip = \"{AP_IP}\"\n"
-            f"ap_subnet = \"{AP_SUBNET}\"\n"
-            f"wan_iface = \"{WAN_IFACE}\"\n\n"
-            f"[dhcp]\n"
-            f"pool_start = \"{AP_POOL_START}\"\n"
-            f"pool_end = \"{AP_POOL_END}\"\n"
-            f"lease_time = 86400\n"
+            "[web]\n"
+            "listen = \"0.0.0.0:80\"\n\n"
+            "[display]\n"
+            "refresh_secs = 10\n\n"
+            "[paths]\n"
+            "hostapd_conf  = \"/etc/hostapd/hostapd.conf\"\n"
+            "nanodhcp_conf = \"/etc/nanodhcp/nanodhcp.conf\"\n"
+            "leases_file   = \"/var/lib/nanodhcp/leases.json\"\n\n"
+            "[services]\n"
+            "hostapd  = \"hostapd\"\n"
+            "nanodhcp = \"nanodhcp\"\n"
+            "web      = \"tinywifi-web\"\n"
+            "display  = \"tinywifi-display\"\n"
         )
+
+    # ------------------------------------------------------------------
+    # Web panel — tinywifi-web (github.com/4stm4/tinyWiFi)
+    # ------------------------------------------------------------------
+
+    # Путь к кешу бинарника на build-сервере
+    _WEB_REPO     = "https://github.com/4stm4/tinyWiFi.git"
+    _WEB_REPO_DIR = Path("/mnt/build-ssd/litainer-build/litainer/cache/tinywifi-web-src")
+    _WEB_BIN_DIR  = Path("/mnt/build-ssd/litainer-build/litainer/cache/tinywifi-web-bin")
+
+    def _web_panel(self, root: Path) -> None:
+        """Собирает tinywifi-web на build-сервере и устанавливает в rootfs."""
+        binary = self._build_web_binary()
+        if binary is None:
+            logging.warning("tinywifi-web не собран — веб-панель недоступна")
+            return
+        # Устанавливаем бинарник
+        dest = root / "usr" / "sbin" / "tinywifi-web"
+        shutil.copy2(binary, dest)
+        dest.chmod(0o755)
+        logging.info("tinywifi-web установлен: %s", dest)
+        # Init-скрипт
+        self._write_exec(root / "etc" / "init.d" / "S20tinywifi-web", """\
+#!/bin/sh
+# S20tinywifi-web — TinyWifi web panel (github.com/4stm4/tinyWiFi)
+CONF=/etc/tinywifi/tinywifi.toml
+PIDFILE=/run/tinywifi-web.pid
+BINARY=/usr/sbin/tinywifi-web
+
+case "$1" in
+start)
+    printf 'Starting tinywifi-web: '
+    if [ ! -x "$BINARY" ]; then
+        echo "SKIP (binary not found)"
+    else
+        start-stop-daemon --start --quiet --background \\
+            --pidfile "$PIDFILE" --make-pidfile \\
+            --exec "$BINARY" -- --config "$CONF"
+        echo 'OK'
+    fi
+    ;;
+stop)
+    printf 'Stopping tinywifi-web: '
+    start-stop-daemon --stop --quiet --pidfile "$PIDFILE" 2>/dev/null || true
+    rm -f "$PIDFILE"
+    echo 'OK'
+    ;;
+restart)
+    "$0" stop; sleep 1; "$0" start
+    ;;
+status)
+    [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null \\
+        && echo "running (pid $(cat $PIDFILE))" || echo "stopped"
+    ;;
+*)
+    echo "Usage: $0 {start|stop|restart|status}"
+    exit 1
+esac
+""")
+
+    def _build_web_binary(self) -> Path | None:
+        """Клонирует/обновляет tinyWiFi и собирает бинарник cargo build --release.
+
+        Возвращает путь к скомпилированному tinywifi-web или None при ошибке.
+        Результат кешируется: повторная сборка запускается только при изменении HEAD.
+        """
+        repo = self._WEB_REPO_DIR
+        bin_cache = self._WEB_BIN_DIR
+        cargo = self._find_cargo()
+        if cargo is None:
+            logging.warning("cargo не найден — пропускаю сборку tinywifi-web")
+            return None
+
+        # Клонируем или обновляем репо
+        try:
+            if not (repo / ".git").exists():
+                logging.info("Клонирую tinyWiFi…")
+                repo.parent.mkdir(parents=True, exist_ok=True)
+                subprocess.run(["git", "clone", "--depth=1", self._WEB_REPO, str(repo)],
+                                check=True, timeout=120)
+            else:
+                logging.info("Обновляю tinyWiFi…")
+                subprocess.run(["git", "-C", str(repo), "pull", "--ff-only"],
+                                check=True, timeout=60)
+        except Exception as exc:
+            logging.warning("git clone/pull tinyWiFi: %s", exc)
+            # Если репо уже есть — работаем с тем что есть
+            if not (repo / "Cargo.toml").exists():
+                return None
+
+        # Вычисляем HEAD commit для кеша
+        try:
+            head = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, check=True, timeout=10,
+            ).stdout.strip()
+        except Exception:
+            head = "unknown"
+
+        cached_bin = bin_cache / f"tinywifi-web-{head}"
+        if cached_bin.exists():
+            logging.info("tinywifi-web кеш актуален (%s)", head)
+            return cached_bin
+
+        # Собираем
+        logging.info("Собираю tinywifi-web (cargo build --release, commit %s)…", head)
+        try:
+            subprocess.run(
+                [cargo, "build", "--release", "--bin", "tinywifi-web"],
+                cwd=str(repo), check=True, timeout=600,
+            )
+        except Exception as exc:
+            logging.error("cargo build tinywifi-web: %s", exc)
+            return None
+
+        built = repo / "target" / "release" / "tinywifi-web"
+        if not built.exists():
+            logging.error("tinywifi-web бинарник не найден после сборки: %s", built)
+            return None
+
+        # Кешируем
+        bin_cache.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(built, cached_bin)
+        logging.info("tinywifi-web собран и закеширован: %s", cached_bin)
+        return cached_bin
+
+    @staticmethod
+    def _find_cargo() -> str | None:
+        """Ищет cargo: в PATH, ~/.cargo/bin/, /usr/bin/."""
+        for candidate in ("cargo", "/root/.cargo/bin/cargo",
+                          os.path.expanduser("~/.cargo/bin/cargo"), "/usr/bin/cargo"):
+            try:
+                subprocess.run([candidate, "--version"], capture_output=True,
+                               check=True, timeout=5)
+                return candidate
+            except Exception:
+                continue
+        return None
 
     # ------------------------------------------------------------------
     # Bluetooth — S04bluetooth init + /etc/bluetooth/main.conf
@@ -471,7 +611,6 @@ esac
         По умолчанию «tinywifi123» (переопределяется NETOS_SSH_PASSWORD).
         Dropbear отклоняет пустой пароль — без этой правки SSH недоступен.
         """
-        import logging
         password = os.environ.get("NETOS_SSH_PASSWORD", "tinywifi123")
 
         # Генерируем SHA-512 crypt-хэш через openssl
