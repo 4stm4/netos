@@ -23,16 +23,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-# Branding — переопределяется env-переменными из профиля
-_HOSTNAME = os.environ.get("NETOS_HOSTNAME", "tinywifi")
-_VERSION  = os.environ.get("NETOS_VERSION",  "0.1.0")
-
-# AP параметры — жёсткие дефолты; переопределяются env из профиля
-AP_SSID    = os.environ.get("NETOS_WIFI_SSID",    "TinyWifi")
-AP_PSK     = os.environ.get("NETOS_WIFI_PSK",     "tinywifi123")
-AP_COUNTRY = os.environ.get("NETOS_WIFI_COUNTRY", "US")
-AP_CHANNEL = os.environ.get("NETOS_WIFI_CHANNEL", "6")
-
 AP_IFACE      = "wlan0"
 AP_IP         = "192.168.44.1"
 AP_SUBNET     = "192.168.44.0/24"
@@ -43,6 +33,15 @@ WAN_IFACE     = "eth0"
 
 class TinyWifiSetup:
     """Provisioner rootfs для TinyWifi AP appliance."""
+
+    def __init__(self) -> None:
+        # Read env at provisioning time, after main.py has applied the profile.
+        self.hostname = os.environ.get("NETOS_HOSTNAME", "tinywifi")
+        self.version = os.environ.get("NETOS_VERSION", "0.1.0")
+        self.ap_ssid = os.environ.get("NETOS_WIFI_SSID", "TinyWifi")
+        self.ap_psk = os.environ.get("NETOS_WIFI_PSK", "tinywifi123")
+        self.ap_country = os.environ.get("NETOS_WIFI_COUNTRY", "US")
+        self.ap_channel = os.environ.get("NETOS_WIFI_CHANNEL", "6")
 
     def install(self, rootfs_path: Path) -> None:
         root = Path(rootfs_path)
@@ -85,11 +84,11 @@ class TinyWifiSetup:
     # ------------------------------------------------------------------
 
     def _base_configs(self, root: Path) -> None:
-        (root / "etc" / "hostname").write_text(f"{_HOSTNAME}\n")
+        (root / "etc" / "hostname").write_text(f"{self.hostname}\n")
         (root / "etc" / "hosts").write_text(
             "127.0.0.1   localhost\n"
-            f"127.0.1.1   {_HOSTNAME}\n"
-            f"{AP_IP}  {_HOSTNAME}\n"
+            f"127.0.1.1   {self.hostname}\n"
+            f"{AP_IP}  {self.hostname}\n"
         )
         (root / "etc" / "resolv.conf").write_text(
             "nameserver 8.8.8.8\nnameserver 8.8.4.4\n"
@@ -102,8 +101,8 @@ class TinyWifiSetup:
             "tmpfs    /tmp     tmpfs    defaults  0 0\n"
         )
         (root / "etc" / "motd").write_text(
-            f"4stm4 TinyWifi {_VERSION}\n"
-            f"  AP:  {AP_SSID}  {AP_IP}/24\n"
+            f"4stm4 TinyWifi {self.version}\n"
+            f"  AP:  {self.ap_ssid}  {AP_IP}/24\n"
             f"  SSH: ssh root@{AP_IP}\n"
             f"  Web: http://{AP_IP}/\n\n"
         )
@@ -158,14 +157,24 @@ fi
 
         self._write_exec(d / "S02modules", f"""\
 #!/bin/sh
-# WiFi драйвер — загружаем через insmod (обходит modprobe/libcrypto).
+# WiFi driver. Prefer modprobe so module dependencies are loaded; keep insmod
+# fallback for minimal rootfs/kmod breakage.
 # Ровно один из двух файлов будет найден в зависимости от платформы:
 #   zero2w:    brcmfmac.ko  (реальный BCM43436, firmware из /lib/firmware/brcm/)
 #   qemu-wifi: mac80211_hwsim.ko (виртуальный WiFi, без firmware)
-for wifi_mod in brcmfmac.ko mac80211_hwsim.ko; do
-    path=$(find /lib/modules -name "$wifi_mod" 2>/dev/null | head -1)
-    [ -n "$path" ] && insmod "$path" 2>/dev/null || true
-done
+rfkill unblock wifi 2>/dev/null || true
+
+load_wifi_mod() {{
+    mod="$1"
+    if command -v modprobe >/dev/null 2>&1; then
+        modprobe "$mod" 2>/dev/null && return 0
+    fi
+    path=$(find /lib/modules -name "$mod.ko" 2>/dev/null | head -1)
+    [ -n "$path" ] && insmod "$path" 2>/dev/null && return 0
+    return 1
+}}
+
+load_wifi_mod brcmfmac || load_wifi_mod mac80211_hwsim || true
 # Сетевые фильтры, USB, PPP — через modprobe; ошибки некритичны
 for m in nf_tables nft_masq nf_nat nf_conntrack \
           usb_serial cp210x ch341 cdc_acm ppp_async ppp_deflate; do
@@ -199,9 +208,11 @@ case "$1" in
 start)
     printf 'Starting TinyWifi: '
 
-    # brcmfmac загружен как модуль (S02modules insmod), firmware уже прогружена.
-    # Ждём появления wlan0 — обычно появляется через 1-3с после insmod.
-    for i in $(seq 1 15); do
+    # Wi-Fi module is loaded by S02modules; firmware probe may still be settling.
+    rfkill unblock wifi 2>/dev/null || true
+
+    # Ждём появления wlan0 — firmware/probe on SDIO can take longer on cold boot.
+    for i in $(seq 1 30); do
         ip link show {AP_IFACE} >/dev/null 2>&1 && break
         sleep 1
     done
@@ -211,7 +222,7 @@ start)
     fi
 
     # Устанавливаем regulatory domain до поднятия AP
-    command -v iw >/dev/null 2>&1 && iw reg set {AP_COUNTRY} 2>/dev/null || true
+    command -v iw >/dev/null 2>&1 && iw reg set {self.ap_country} 2>/dev/null || true
 
     # IP forwarding (NAT)
     echo 1 > /proc/sys/net/ipv4/ip_forward
@@ -221,13 +232,24 @@ start)
         nft -f "$NFT_CONF" || true
     fi
 
-    # hostapd — поднимает AP и управляет wlan0
-    if command -v hostapd >/dev/null 2>&1 && [ -f "$HOSTAPD_CONF" ]; then
-        hostapd -B "$HOSTAPD_CONF" -P /run/hostapd.pid
+    ip addr flush dev {AP_IFACE} 2>/dev/null || true
+
+    # hostapd — поднимает AP и управляет wlan0. Fail fast: without hostapd
+    # there is no Wi-Fi AP, so printing OK hides the real boot failure.
+    if ! command -v hostapd >/dev/null 2>&1; then
+        echo "ERROR: hostapd not found" >&2
+        exit 1
+    fi
+    if [ ! -f "$HOSTAPD_CONF" ]; then
+        echo "ERROR: $HOSTAPD_CONF not found" >&2
+        exit 1
+    fi
+    if ! hostapd -B "$HOSTAPD_CONF" -P /run/hostapd.pid; then
+        echo "ERROR: hostapd failed to start" >&2
+        exit 1
     fi
 
     # IP на wlan0 после того как hostapd поднял AP
-    ip addr flush dev {AP_IFACE}
     ip addr add {AP_IP}/24 dev {AP_IFACE}
 
     # nanodhcp — DHCP для клиентов AP
@@ -245,7 +267,7 @@ start)
     fi
 
     echo 'OK'
-    echo "TinyWifi: AP={AP_SSID} {AP_IP}/24"
+    echo "TinyWifi: AP={self.ap_ssid} {AP_IP}/24"
     ;;
 stop)
     printf 'Stopping TinyWifi: '
@@ -283,15 +305,15 @@ esac
             f"# /etc/hostapd/hostapd.conf — 4stm4 TinyWifi\n"
             f"interface={AP_IFACE}\n"
             f"driver=nl80211\n"
-            f"ssid={AP_SSID}\n"
+            f"ssid={self.ap_ssid}\n"
             f"hw_mode=g\n"
-            f"channel={AP_CHANNEL}\n"
-            f"country_code={AP_COUNTRY}\n"
+            f"channel={self.ap_channel}\n"
+            f"country_code={self.ap_country}\n"
             f"ieee80211d=1\n"
             f"wmm_enabled=1\n"
             f"auth_algs=1\n"
             f"wpa=2\n"
-            f"wpa_passphrase={AP_PSK}\n"
+            f"wpa_passphrase={self.ap_psk}\n"
             f"wpa_key_mgmt=WPA-PSK\n"
             f"rsn_pairwise=CCMP\n"
         )
@@ -365,9 +387,25 @@ esac
     # ------------------------------------------------------------------
 
     # Путь к кешу бинарника на build-сервере
-    _WEB_REPO     = "https://github.com/4stm4/tinyWiFi.git"
-    _WEB_REPO_DIR = Path("/mnt/build-ssd/litainer-build/litainer/cache/tinywifi-web-src")
-    _WEB_BIN_DIR  = Path("/mnt/build-ssd/litainer-build/litainer/cache/tinywifi-web-bin")
+    # Переопределяются через NETOS_TINYWIFI_CACHE_DIR; по умолчанию рядом с temp/
+    _WEB_REPO = "https://github.com/4stm4/tinyWiFi.git"
+
+    @staticmethod
+    def _cache_base() -> Path:
+        env = os.environ.get("NETOS_TINYWIFI_CACHE_DIR", "")
+        if env:
+            return Path(env)
+        # PROJECT_ROOT = src/../  →  рядом с temp/
+        here = Path(__file__).resolve().parent.parent.parent
+        return here / "temp" / "tinywifi-cache"
+
+    @property
+    def _WEB_REPO_DIR(self) -> Path:          # type: ignore[override]
+        return self._cache_base() / "tinywifi-web-src"
+
+    @property
+    def _WEB_BIN_DIR(self) -> Path:           # type: ignore[override]
+        return self._cache_base() / "tinywifi-web-bin"
 
     def _web_panel(self, root: Path) -> None:
         """Собирает tinywifi-web на build-сервере и устанавливает в rootfs."""
@@ -589,7 +627,7 @@ esac
             f"<head>\n"
             f"<meta charset=\"UTF-8\">\n"
             f"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-            f"<title>TinyWifi {_VERSION}</title>\n"
+            f"<title>TinyWifi {self.version}</title>\n"
             f"<style>\n"
             f"  body {{ font-family: monospace; background: #111; color: #0f0; margin: 2em; }}\n"
             f"  h1   {{ color: #0f0; }}\n"
@@ -598,9 +636,9 @@ esac
             f"</style>\n"
             f"</head>\n"
             f"<body>\n"
-            f"<h1>&#128241; 4stm4 TinyWifi {_VERSION}</h1>\n"
+            f"<h1>&#128241; 4stm4 TinyWifi {self.version}</h1>\n"
             f"<div class=\"box\">\n"
-            f"  <p><b>AP SSID:</b> {AP_SSID}</p>\n"
+            f"  <p><b>AP SSID:</b> {self.ap_ssid}</p>\n"
             f"  <p><b>IP:</b> {AP_IP}/24</p>\n"
             f"  <p><b>DHCP:</b> {AP_POOL_START} &ndash; {AP_POOL_END}</p>\n"
             f"  <p><b>SSH:</b> <code>ssh root@{AP_IP}</code></p>\n"
