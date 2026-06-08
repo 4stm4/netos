@@ -86,14 +86,39 @@ def install_dependencies(kernel_arch: str = "arm64") -> None:
 
     try:
         subprocess.run(prefix + ["apt-get", "update"], check=True)
-        # --allow-change-held-packages resolves Ubuntu security-patch conflicts
-        # where library versions (zlib1g, libbz2, libzstd) get bumped by
-        # security updates but -dev packages still require old exact versions.
         subprocess.run(
             prefix + ["apt-get", "install", "-y", "--allow-change-held-packages"]
             + dependencies,
             check=True,
         )
     except subprocess.CalledProcessError as e:
-        logging.error(f"Ошибка при установке зависимостей сборочной VM: {e}")
-        sys.exit(1)
+        logging.warning("apt-get install завершился с ошибкой: %s", e)
+        # On Ubuntu Noble, security patches can create exact-version conflicts
+        # (libbz2, libzstd, zlib1g). Check that the essential tools are present
+        # before aborting — the server may already have everything needed.
+        missing = _check_essential_tools(kernel_arch)
+        if missing:
+            logging.error(
+                "Ошибка установки зависимостей, отсутствуют критичные инструменты: %s",
+                ", ".join(missing),
+            )
+            sys.exit(1)
+        logging.info(
+            "apt-get install завершился с предупреждениями, но все критичные "
+            "инструменты присутствуют — продолжаем сборку."
+        )
+
+
+def _check_essential_tools(kernel_arch: str) -> list[str]:
+    """Return list of essential build tools that are missing from PATH / dpkg."""
+    import shutil
+
+    required = ["gcc", "make", "git", "curl", "cpio", "python3"]
+    cross_prefix = {
+        "arm64":  "aarch64-linux-gnu-gcc",
+        "x86":    "x86_64-linux-gnu-gcc",
+        "x86_64": "x86_64-linux-gnu-gcc",
+    }.get(kernel_arch, "aarch64-linux-gnu-gcc")
+    required.append(cross_prefix)
+
+    return [t for t in required if not shutil.which(t)]
