@@ -16,6 +16,7 @@ from src.configurator.routes.settings import router as settings_router, apply_sa
 from src.configurator.routes.kernel import router as kernel_router
 from src.configurator.routes.kernel_catalog import router as kernel_catalog_router
 from src.configurator.routes.kernel_config import router as kernel_config_router
+from src.configurator.routes.pkg_cache import router as pkg_cache_router
 
 _HERE = Path(__file__).parent
 _INDEX_HTML = _HERE / "templates" / "index.html"
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(kernel_router, prefix="/api")
     app.include_router(kernel_catalog_router, prefix="/api")
     app.include_router(kernel_config_router, prefix="/api")
+    app.include_router(pkg_cache_router, prefix="/api")
 
     app.mount("/static", StaticFiles(directory=str(_HERE / "static")), name="static")
 

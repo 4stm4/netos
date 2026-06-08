@@ -867,3 +867,119 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
   border: 1px solid var(--border); border-radius: 8px;
   flex-shrink: 0; min-height: 38px;
 }
+
+/* ═══════════════════════════════════════════════════════
+   Package Cache Manager
+   ═══════════════════════════════════════════════════════ */
+
+.sidebar-extra-nav {
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.extra-nav-btn {
+  width: 100%; text-align: left;
+  padding: 7px 10px; border-radius: 6px;
+  background: none; border: none; cursor: pointer;
+  color: var(--fg-2); font-size: 13px; font-weight: 500;
+  transition: background .15s, color .15s;
+}
+.extra-nav-btn:hover { background: var(--bg-2); color: var(--fg); }
+.extra-nav-btn.active { background: color-mix(in srgb,var(--accent) 15%,var(--bg)); color: var(--accent); font-weight: 600; }
+
+.pkg-cache-page { padding: 0 0 40px; }
+
+.pkg-cache-stats {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 10px 0 14px;
+}
+.stat-chip {
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 14px; min-width: 90px;
+}
+.stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.stat-val   { font-size: 15px; font-weight: 700; color: var(--fg); }
+
+.pkg-tabs {
+  display: flex; gap: 0; border-bottom: 2px solid var(--border);
+  margin-bottom: 16px;
+}
+.pkg-tab {
+  padding: 8px 20px; font-size: 13px; font-weight: 500;
+  background: none; border: none; cursor: pointer;
+  color: var(--fg-2); border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: color .15s, border-color .15s;
+}
+.pkg-tab:hover { color: var(--fg); }
+.pkg-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+.pkg-tab-content { padding-bottom: 20px; }
+
+.pkg-add-form {
+  background: var(--bg-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px; margin-bottom: 16px;
+}
+.pkg-form-row {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px;
+}
+.inp-sm {
+  padding: 5px 10px; font-size: 13px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--fg); outline: none;
+  transition: border-color .15s;
+}
+.inp-sm:focus { border-color: var(--accent); }
+.btn-xs {
+  font-size: 11px; padding: 3px 8px; border-radius: 4px; cursor: pointer;
+  background: var(--bg-1); border: 1px solid var(--border); color: var(--fg-2);
+  transition: background .12s, color .12s, border-color .12s;
+}
+.btn-xs:hover, .btn-xs.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.pkg-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.pkg-table th {
+  text-align: left; padding: 5px 10px; font-size: 11px;
+  color: var(--muted); font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; border-bottom: 1px solid var(--border);
+}
+.pkg-table td {
+  padding: 6px 10px; vertical-align: top;
+  border-bottom: 1px solid color-mix(in srgb,var(--border) 50%,transparent);
+}
+.pkg-table tr:hover td { background: var(--bg-1); }
+
+.kernel-cache-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 6px;
+  background: var(--bg-1); border: 1px solid var(--border);
+  margin-bottom: 5px;
+}
+.badge-rpi      { background: #1d4ed8; color: #fff; }
+.badge-mainline { background: #166534; color: #fff; }
+.badge-off      { background: var(--bg-2); color: var(--muted); }
+
+/* Job cards */
+.job-card {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 10px;
+  transition: border-color .15s;
+}
+.job-card.job-running { border-color: #facc15; }
+.job-card.job-done    { border-color: var(--ok); }
+.job-card.job-error   { border-color: var(--err); }
+.job-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.job-status-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.job-status-dot.running { background: #facc15; animation: blink 1s infinite; }
+.job-status-dot.done    { background: var(--ok); }
+.job-status-dot.error   { background: var(--err); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.job-label { font-size: 13px; font-weight: 600; flex: 1; }
+.job-id    { font-size: 11px; color: var(--muted); }
+.job-log   { background: var(--bg-code, #1e1e2e); border-radius: 5px; padding: 6px 10px; overflow-y: auto; }

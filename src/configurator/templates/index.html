@@ -26,6 +26,13 @@
       </template>
     </nav>
 
+    <div class="sidebar-extra-nav">
+      <button class="extra-nav-btn" :class="{ active: page === 'cache' }"
+              @click="page='cache'; loadPkgCache()">
+        📦 Кэш пакетов
+      </button>
+    </div>
+
     <div class="profile-section">
       <div class="section-label">Профиль</div>
       <select x-model="profileName" @change="loadProfile(profileName)" class="full-width">
@@ -43,6 +50,9 @@
 
   <!-- ── Content ───────────────────────────────────────────────── -->
   <div class="content">
+
+    <!-- ═══════════════ WIZARD ═══════════════ -->
+    <div x-show="page === 'wizard'">
     <div class="step-header">
       <h1 x-text="['Среда', 'Target', 'Ядро Linux', 'Опции ядра', 'Модули', 'Драйверы', 'Branding & Network', 'Packages', 'Web UI & Nervum', 'Build'][step-1]"></h1>
     </div>
@@ -981,6 +991,252 @@
       <button class="btn-secondary" @click="step--" x-show="step > 1">← Назад</button>
       <button class="btn-primary" @click="step++" x-show="step < 10">Далее →</button>
     </div>
+    </div><!-- /wizard -->
+
+    <!-- ═══════════════ CACHE PAGE ═══════════════ -->
+    <div x-show="page === 'cache'" class="pkg-cache-page">
+
+      <!-- Header -->
+      <div class="step-header" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <button class="btn-secondary" @click="page='wizard'" style="font-size:12px;padding:4px 10px">← Конфигуратор</button>
+        <h1 style="margin:0;flex:1">📦 Кэш пакетов и ядер</h1>
+        <button class="btn-sm" @click="loadPkgCache()" :disabled="pkgCacheLoading">↻ Обновить</button>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="pkg-cache-stats" x-show="pkgCacheStatus">
+        <div class="stat-chip">
+          <span class="stat-label">Buildroot</span>
+          <span class="stat-val" x-text="pkgCacheStatus?.buildroot_version ?? '—'"></span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-label">dl/ кэш</span>
+          <span class="stat-val" x-text="pkgCacheStatus?.dl_size ?? '—'"></span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-label">Пакеты</span>
+          <span class="stat-val" x-text="(pkgCacheStatus?.package_count ?? 0) + ' шт'"></span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-label">RPi ядра</span>
+          <span class="stat-val" x-text="(pkgCacheStatus?.rpi_kernel_tarballs?.length ?? 0) + ' файл'"></span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-label">Mainline</span>
+          <span class="stat-val" x-text="(pkgCacheStatus?.mainline_kernel_tarballs?.length ?? 0) + ' файл'"></span>
+        </div>
+        <div class="stat-chip" x-show="pkgCacheJobs.filter(j=>j.status==='running').length > 0">
+          <span class="stat-label">Загрузок</span>
+          <span class="stat-val" style="color:#facc15" x-text="pkgCacheJobs.filter(j=>j.status==='running').length + ' активно'"></span>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="pkg-tabs">
+        <button class="pkg-tab" :class="{active: pkgCacheTab==='packages'}" @click="pkgCacheTab='packages'">
+          📦 Пакеты Buildroot
+        </button>
+        <button class="pkg-tab" :class="{active: pkgCacheTab==='kernels'}" @click="pkgCacheTab='kernels'">
+          🐧 Ядра Linux
+        </button>
+        <button class="pkg-tab" :class="{active: pkgCacheTab==='jobs'}" @click="pkgCacheTab='jobs'">
+          ⚙ Задачи
+          <span x-show="pkgCacheJobs.filter(j=>j.status==='running').length > 0"
+                x-text="pkgCacheJobs.filter(j=>j.status==='running').length"
+                style="background:var(--accent);color:#fff;border-radius:99px;padding:1px 7px;font-size:11px;margin-left:5px"></span>
+        </button>
+      </div>
+
+      <!-- ── PACKAGES TAB ── -->
+      <div x-show="pkgCacheTab==='packages'" class="pkg-tab-content">
+
+        <!-- Add form -->
+        <div class="pkg-add-form">
+          <div class="section-label">Добавить пакет в кэш</div>
+          <div class="pkg-form-row">
+            <input type="text" x-model="pkgFetchForm.name"     placeholder="пакет (e.g. openssl)"    class="inp-sm" style="width:160px">
+            <input type="text" x-model="pkgFetchForm.version"  placeholder="версия (e.g. 3.3.1)"     class="inp-sm" style="width:120px">
+            <input type="text" x-model="pkgFetchForm.url"      placeholder="https://… URL тарболла"  class="inp-sm" style="flex:1;min-width:260px">
+            <input type="text" x-model="pkgFetchForm.filename" placeholder="filename (авто)"          class="inp-sm" style="width:180px">
+            <button class="btn-primary" @click="fetchPackage()"
+                    :disabled="!pkgFetchForm.name.trim() || !pkgFetchForm.url.trim()">⬇ Скачать</button>
+          </div>
+          <!-- Quick-fill -->
+          <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+            <span style="font-size:11px;color:var(--muted)">Известные проблемы:</span>
+            <template x-for="qp in pkgQuickPackages" :key="qp.name+qp.version">
+              <button class="btn-xs" @click="pkgFetchForm={name:qp.name,version:qp.version,url:qp.url,filename:qp.filename||''}"
+                      :title="qp.url">
+                <span x-text="qp.name + ' ' + qp.version"></span>
+                <span x-show="pkgCachePackages.find(p=>p.package===qp.name && p.files.some(f=>f.name.includes(qp.version)))"
+                      style="color:#4ade80;margin-left:3px">✓</span>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- Package list table -->
+        <div x-show="pkgCacheLoading && pkgCachePackages.length===0" style="color:var(--muted);padding:16px 0">Загрузка...</div>
+        <div x-show="!pkgCacheLoading && pkgCachePackages.length===0" style="color:var(--fg-2);font-size:13px;padding:12px 0">
+          Кэш пуст. Запустите хотя бы одну сборку, чтобы Buildroot создал директорию dl/, или добавьте пакеты выше.
+        </div>
+        <div x-show="pkgCachePackages.length > 0">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px"
+               x-text="pkgCachePackages.length + ' пакетов в dl/ кэше'"></div>
+          <table class="pkg-table">
+            <thead><tr><th>Пакет</th><th>Файлы</th><th>Размер</th><th>Дата</th><th></th></tr></thead>
+            <tbody>
+              <template x-for="pkg in pkgCachePackages" :key="pkg.package">
+                <tr>
+                  <td class="mono" style="font-weight:600" x-text="pkg.package"></td>
+                  <td>
+                    <template x-for="f in pkg.files" :key="f.name">
+                      <div class="mono" style="font-size:11px;color:var(--fg-2)" x-text="f.name"></div>
+                    </template>
+                    <div x-show="pkg.files.length===0" style="color:var(--muted);font-size:11px">пусто</div>
+                  </td>
+                  <td x-text="pkg.total_size"></td>
+                  <td style="font-size:11px;color:var(--fg-2)"
+                      x-text="pkg.files[0] ? fmtDate(pkg.files[0].mtime*1000) : ''"></td>
+                  <td>
+                    <button class="btn-del-build" @click="deletePkgPackage(pkg.package)" title="Удалить из кэша">×</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div><!-- /packages tab -->
+
+      <!-- ── KERNELS TAB ── -->
+      <div x-show="pkgCacheTab==='kernels'" class="pkg-tab-content">
+
+        <!-- Download form -->
+        <div class="pkg-add-form">
+          <div class="section-label">Скачать исходники ядра заранее</div>
+          <div class="pkg-form-row" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
+            <div>
+              <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:3px">Тип</label>
+              <select x-model="pkgFetchKernelForm.source" class="inp-sm" style="width:130px">
+                <option value="rpi">RPi Linux</option>
+                <option value="mainline">Mainline</option>
+              </select>
+            </div>
+            <div x-show="pkgFetchKernelForm.source==='rpi'">
+              <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:3px">Ветка</label>
+              <input type="text" x-model="pkgFetchKernelForm.branch" placeholder="rpi-6.12.y" class="inp-sm" style="width:150px">
+            </div>
+            <div x-show="pkgFetchKernelForm.source==='rpi'" style="padding-top:18px;display:flex;gap:4px">
+              <template x-for="b in ['rpi-6.1.y','rpi-6.6.y','rpi-6.12.y']" :key="b">
+                <button class="btn-xs" @click="pkgFetchKernelForm.branch=b"
+                        :class="{active: pkgFetchKernelForm.branch===b}" x-text="b"></button>
+              </template>
+            </div>
+            <div x-show="pkgFetchKernelForm.source==='mainline'">
+              <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:3px">Версия</label>
+              <input type="text" x-model="pkgFetchKernelForm.version" placeholder="6.12.27" class="inp-sm" style="width:120px">
+            </div>
+            <div x-show="pkgFetchKernelForm.source==='mainline'" style="padding-top:18px;display:flex;gap:4px">
+              <template x-for="v in ['6.6.90','6.12.27','6.15.4']" :key="v">
+                <button class="btn-xs" @click="pkgFetchKernelForm.version=v"
+                        :class="{active: pkgFetchKernelForm.version===v}" x-text="v"></button>
+              </template>
+            </div>
+            <div style="padding-top:18px">
+              <button class="btn-primary" @click="fetchKernel()">⬇ Скачать (~130–150 МБ)</button>
+            </div>
+          </div>
+          <div x-show="pkgFetchKernelForm.source==='rpi'" style="margin-top:6px;font-size:12px;color:var(--muted)">
+            Источник: github.com/raspberrypi/linux/archive/refs/heads/<span class="mono" x-text="pkgFetchKernelForm.branch"></span>.tar.gz
+          </div>
+          <div x-show="pkgFetchKernelForm.source==='mainline'" style="margin-top:6px;font-size:12px;color:var(--muted)">
+            Источник: cdn.kernel.org/pub/linux/kernel/v<span class="mono" x-text="(pkgFetchKernelForm.version||'').split('.')[0]||'6'"></span>.x/linux-<span class="mono" x-text="pkgFetchKernelForm.version"></span>.tar.xz
+          </div>
+        </div>
+
+        <!-- Cached kernels -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:4px">
+          <div>
+            <div class="section-label">RPi тарболлы</div>
+            <div x-show="(pkgCacheKernels?.rpi_tarballs?.length??0)===0" style="color:var(--fg-2);font-size:13px;padding:4px 0">Нет</div>
+            <template x-for="k in (pkgCacheKernels?.rpi_tarballs??[])" :key="k.filename">
+              <div class="kernel-cache-row">
+                <span class="badge badge-rpi">RPi</span>
+                <span class="mono" style="flex:1;font-size:13px" x-text="k.branch"></span>
+                <span style="color:var(--fg-2);font-size:12px;margin-right:6px" x-text="k.size"></span>
+                <button class="btn-del-build" @click="deleteKernelFile(k.filename)" title="Удалить">×</button>
+              </div>
+            </template>
+          </div>
+          <div>
+            <div class="section-label">Mainline тарболлы</div>
+            <div x-show="(pkgCacheKernels?.mainline_tarballs?.length??0)===0" style="color:var(--fg-2);font-size:13px;padding:4px 0">Нет</div>
+            <template x-for="k in (pkgCacheKernels?.mainline_tarballs??[])" :key="k.filename">
+              <div class="kernel-cache-row">
+                <span class="badge badge-mainline">ML</span>
+                <span class="mono" style="flex:1;font-size:13px" x-text="k.version"></span>
+                <span style="color:var(--fg-2);font-size:12px;margin-right:6px" x-text="k.size"></span>
+                <button class="btn-del-build" @click="deleteKernelFile(k.filename)" title="Удалить">×</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Extracted sources -->
+        <div style="margin-top:16px">
+          <div class="section-label">Распакованные исходники (готовы к сборке)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="kernel-cache-row" :style="pkgCacheKernels?.rpi_extracted?.present ? '' : 'opacity:0.5'">
+              <span class="badge" :class="pkgCacheKernels?.rpi_extracted?.present ? 'badge-rpi' : 'badge-off'">RPi</span>
+              <span style="flex:1;font-size:13px">
+                <span x-show="pkgCacheKernels?.rpi_extracted?.present" style="color:#4ade80">✓ Распаковано</span>
+                <span x-show="!pkgCacheKernels?.rpi_extracted?.present" style="color:var(--muted)">Не распаковано</span>
+              </span>
+              <span x-show="pkgCacheKernels?.rpi_extracted?.version" class="mono"
+                    style="font-size:11px;color:var(--fg-2)" x-text="pkgCacheKernels?.rpi_extracted?.version"></span>
+            </div>
+            <div class="kernel-cache-row" :style="pkgCacheKernels?.mainline_extracted?.present ? '' : 'opacity:0.5'">
+              <span class="badge" :class="pkgCacheKernels?.mainline_extracted?.present ? 'badge-mainline' : 'badge-off'">ML</span>
+              <span style="flex:1;font-size:13px">
+                <span x-show="pkgCacheKernels?.mainline_extracted?.present" style="color:#4ade80">✓ Распаковано</span>
+                <span x-show="!pkgCacheKernels?.mainline_extracted?.present" style="color:var(--muted)">Не распаковано</span>
+              </span>
+              <span x-show="pkgCacheKernels?.mainline_extracted?.version" class="mono"
+                    style="font-size:11px;color:var(--fg-2)" x-text="pkgCacheKernels?.mainline_extracted?.version"></span>
+            </div>
+          </div>
+        </div>
+      </div><!-- /kernels tab -->
+
+      <!-- ── JOBS TAB ── -->
+      <div x-show="pkgCacheTab==='jobs'" class="pkg-tab-content">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          <button class="btn-sm" @click="loadPkgJobs()">↻ Обновить</button>
+          <span style="font-size:12px;color:var(--muted)" x-text="pkgCacheJobs.length + ' задач, ' + pkgCacheJobs.filter(j=>j.status==='running').length + ' активных'"></span>
+        </div>
+        <div x-show="pkgCacheJobs.length===0" style="color:var(--fg-2);font-size:13px">Нет задач</div>
+        <template x-for="job in pkgCacheJobs" :key="job.id">
+          <div class="job-card" :class="'job-' + job.status">
+            <div class="job-header">
+              <span class="job-status-dot" :class="job.status"></span>
+              <span class="job-label" x-text="job.label"></span>
+              <span class="job-id mono" x-text="job.id"></span>
+              <span x-show="job.finished" style="font-size:11px;color:var(--fg-2);margin-left:auto"
+                    x-text="fmtDate(job.finished*1000)"></span>
+            </div>
+            <div class="job-log build-log" style="max-height:140px;margin-top:6px">
+              <template x-for="(line, li) in job.log" :key="li">
+                <div class="log-line mono"
+                     :style="line.startsWith('✓') ? 'color:#4ade80' : line.startsWith('✗') ? 'color:#f87171' : line.startsWith('ERROR') ? 'color:#f87171' : ''"
+                     x-text="line"></div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div><!-- /jobs tab -->
+
+    </div><!-- /cache page -->
+
   </div>
 </div>
 
@@ -1099,6 +1355,7 @@ function mkProfile() {
 function app() {
   return {
     step: 1,
+    page: 'wizard',   // 'wizard' | 'cache'
     profile: mkProfile(),
     profileName: '',
     profiles: [],
@@ -1150,6 +1407,25 @@ function app() {
     defconfigLoading: false,
     presets: [],
     selectedProfilePreset: null,
+
+    // ── Package cache page ──────────────────────────────────────
+    pkgCacheStatus:   null,
+    pkgCachePackages: [],
+    pkgCacheKernels:  null,
+    pkgCacheJobs:     [],
+    pkgCacheLoading:  false,
+    pkgCacheTab:      'packages',
+    pkgJobsTimer:     null,
+    pkgFetchForm:     { name: '', version: '', url: '', filename: '' },
+    pkgFetchKernelForm: { source: 'rpi', branch: 'rpi-6.12.y', version: '6.12.27' },
+    pkgQuickPackages: [
+      { name: 'attr',    version: '2.5.2', url: 'https://download.savannah.gnu.org/releases/attr/attr-2.5.2.tar.xz' },
+      { name: 'acl',     version: '2.3.2', url: 'https://download.savannah.nongnu.org/releases/acl/acl-2.3.2.tar.xz' },
+      { name: 'libcap',  version: '2.70',  url: 'https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.70.tar.xz' },
+      { name: 'openssl', version: '3.3.1', url: 'https://github.com/openssl/openssl/releases/download/openssl-3.3.1/openssl-3.3.1.tar.gz' },
+      { name: 'zlib',    version: '1.3.1', url: 'https://zlib.net/zlib-1.3.1.tar.gz' },
+      { name: 'busybox', version: '1.37.0',url: 'https://busybox.net/downloads/busybox-1.37.0.tar.bz2' },
+    ],
 
     async init() {
       const [t, p, d, pr, ps] = await Promise.all([
@@ -1731,6 +2007,110 @@ function app() {
         es.onerror = () => { es.close(); this.building = false }
       }
     },
+
+    // ═══════════════════════════════════════════════════════════
+    // Package Cache Manager
+    // ═══════════════════════════════════════════════════════════
+
+    async loadPkgCache() {
+      this.pkgCacheLoading = true
+      try {
+        const [status, packages, kernels, jobs] = await Promise.all([
+          fetch('/api/pkg-cache/status').then(r => r.json()),
+          fetch('/api/pkg-cache/packages').then(r => r.json()),
+          fetch('/api/pkg-cache/kernels').then(r => r.json()),
+          fetch('/api/pkg-cache/jobs').then(r => r.json()),
+        ])
+        this.pkgCacheStatus   = status
+        this.pkgCachePackages = packages.packages || []
+        this.pkgCacheKernels  = kernels
+        this.pkgCacheJobs     = (jobs.jobs || []).slice(0, 30)
+      } catch (e) {
+        console.error('loadPkgCache error:', e)
+      } finally {
+        this.pkgCacheLoading = false
+      }
+    },
+
+    async loadPkgJobs() {
+      try {
+        const data = await fetch('/api/pkg-cache/jobs').then(r => r.json())
+        this.pkgCacheJobs = (data.jobs || []).slice(0, 30)
+        // auto-refresh while any job is running
+        const running = this.pkgCacheJobs.some(j => j.status === 'running')
+        if (running) {
+          clearTimeout(this.pkgJobsTimer)
+          this.pkgJobsTimer = setTimeout(() => this.loadPkgJobs(), 2000)
+        }
+      } catch (e) {}
+    },
+
+    async fetchPackage() {
+      const f = this.pkgFetchForm
+      if (!f.name.trim() || !f.url.trim()) return
+      try {
+        const res = await fetch('/api/pkg-cache/fetch-package', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: f.name.trim(),
+            version: f.version.trim() || '0',
+            url: f.url.trim(),
+            filename: f.filename.trim() || null,
+          }),
+        }).then(r => r.json())
+        if (res.job_id) {
+          this.pkgCacheTab = 'jobs'
+          // start polling jobs
+          this.pkgJobsTimer = setTimeout(() => this.loadPkgJobs(), 800)
+          await this.loadPkgJobs()
+        }
+      } catch (e) {
+        alert('Ошибка: ' + e.message)
+      }
+    },
+
+    async fetchKernel() {
+      const f = this.pkgFetchKernelForm
+      try {
+        const body = { source: f.source }
+        if (f.source === 'rpi')      body.branch  = f.branch.trim()
+        if (f.source === 'mainline') body.version = f.version.trim()
+        const res = await fetch('/api/pkg-cache/fetch-kernel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }).then(r => r.json())
+        if (res.job_id) {
+          this.pkgCacheTab = 'jobs'
+          this.pkgJobsTimer = setTimeout(() => this.loadPkgJobs(), 800)
+          await this.loadPkgJobs()
+        }
+      } catch (e) {
+        alert('Ошибка: ' + e.message)
+      }
+    },
+
+    async deletePkgPackage(name) {
+      if (!confirm(`Удалить ${name} из кэша?`)) return
+      try {
+        await fetch(`/api/pkg-cache/packages/${name}`, { method: 'DELETE' })
+        await this.loadPkgCache()
+      } catch (e) {
+        alert('Ошибка: ' + e.message)
+      }
+    },
+
+    async deleteKernelFile(filename) {
+      if (!confirm(`Удалить ${filename}?`)) return
+      try {
+        await fetch(`/api/pkg-cache/kernels/${encodeURIComponent(filename)}`, { method: 'DELETE' })
+        await this.loadPkgCache()
+      } catch (e) {
+        alert('Ошибка: ' + e.message)
+      }
+    },
+
   }
 }
 </script>
