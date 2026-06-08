@@ -35,6 +35,7 @@ def get_targets():
             "build_kernel_modules": t.build_kernel_modules,
             "kernel_config_options": list(t.kernel_config_options),
             "buildroot_package_lines": list(t.buildroot_package_lines),
+            "kernel_source": getattr(t, "kernel_source", "rpi"),
             "wifi_capable": name in _WIFI_CAPABLE_TARGETS,
             "status": "verified" if name == "qemu-virt" else "wip",
         }

@@ -644,3 +644,59 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg-2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+/* ── Kernel version picker ─────────────────────────────────────────────── */
+.kernel-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.kernel-card {
+  width: 130px;
+  padding: 10px 10px 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.kernel-card:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-1));
+}
+.kernel-card.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-1));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.kernel-card.k-eol {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.kernel-card:disabled { pointer-events: none; }
+.k-version {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.k-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.k-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.badge-lts    { background: color-mix(in srgb, var(--ok) 20%, transparent);   color: var(--ok); }
+.badge-stable { background: color-mix(in srgb, var(--info) 20%, transparent); color: var(--info); }
+.badge-eol    { background: color-mix(in srgb, var(--err) 20%, transparent);  color: var(--err); }
+.badge-rc     { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.badge-rpi    { background: color-mix(in srgb, #c11 20%, transparent);        color: #e44; }
+.k-date, .k-eol-date { font-size: 11px; color: var(--fg-3); margin-top: 3px; }

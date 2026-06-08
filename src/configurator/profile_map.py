@@ -71,6 +71,12 @@ def profile_to_env(profile: Profile) -> dict[str, str]:
         if profile.network.wifi.country:
             env.setdefault("NETOS_WIFI_COUNTRY", profile.network.wifi.country)
 
+    # kernel version overrides
+    if profile.kernel.rpi_branch:
+        env["NETOS_KERNEL_BRANCH"] = profile.kernel.rpi_branch
+    if profile.kernel.mainline_version:
+        env["NETOS_MAINLINE_KERNEL_VERSION"] = profile.kernel.mainline_version
+
     # paths
     if profile.paths.temp_dir:
         env["NETOS_TEMP_DIR"] = profile.paths.temp_dir
