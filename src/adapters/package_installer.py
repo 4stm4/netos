@@ -54,9 +54,9 @@ def install_dependencies(kernel_arch: str = "arm64") -> None:
         "tar",
         "gzip",
         "xz-utils",
-        # bzip2 and zstd omitted: Ubuntu Noble security patches break exact-version
-        # deps for these packages; they are already present on any modern Ubuntu
-        # system and Buildroot supplies its own copies anyway.
+        # bzip2 broken on Ubuntu Noble (libbz2-1.0 version mismatch).
+        # lbzip2 provides bzcat/bzip2 as drop-in replacements.
+        "lbzip2",
         # disk image creation and local QEMU checks
         "fdisk",
         "dosfstools",
