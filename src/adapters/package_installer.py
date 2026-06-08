@@ -84,12 +84,12 @@ def install_dependencies(kernel_arch: str = "arm64") -> None:
 
     try:
         subprocess.run(prefix + ["apt-get", "update"], check=True)
-        # --fix-broken resolves held/broken packages before installing
-        # (common on Ubuntu when security patches bump library versions
-        #  but -dev packages still require the old exact version)
-        subprocess.run(prefix + ["apt-get", "install", "-f", "-y"], check=False)
+        # --allow-change-held-packages resolves Ubuntu security-patch conflicts
+        # where library versions (zlib1g, libbz2, libzstd) get bumped by
+        # security updates but -dev packages still require old exact versions.
         subprocess.run(
-            prefix + ["apt-get", "install", "-y", "--fix-missing"] + dependencies,
+            prefix + ["apt-get", "install", "-y", "--allow-change-held-packages"]
+            + dependencies,
             check=True,
         )
     except subprocess.CalledProcessError as e:
