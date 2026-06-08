@@ -13,7 +13,23 @@ from pathlib import Path
 from typing import AsyncGenerator, Literal
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-BUILDS_DIR = PROJECT_ROOT / "builds"
+
+# Directory where build state/log JSON files are persisted.
+# Override priority: set_builds_dir() call > NETOS_BUILDS_DIR env var > default.
+BUILDS_DIR = Path(os.environ.get("NETOS_BUILDS_DIR", str(PROJECT_ROOT / "builds")))
+
+
+def get_builds_dir() -> Path:
+    """Return the currently configured builds directory."""
+    return BUILDS_DIR
+
+
+def set_builds_dir(path: Path | str) -> Path:
+    """Update the builds directory at runtime (used by settings API)."""
+    global BUILDS_DIR
+    BUILDS_DIR = Path(path)
+    BUILDS_DIR.mkdir(parents=True, exist_ok=True)
+    return BUILDS_DIR
 
 
 def _now() -> str:

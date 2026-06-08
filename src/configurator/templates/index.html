@@ -319,6 +319,20 @@
               x-text="pathHint('cache_dir')"></div>
           </div>
 
+          <!-- Builds history dir -->
+          <div class="field field-full">
+            <label>Директория истории сборок
+              <span class="field-hint">Где хранятся JSON/лог файлы сборок (история).
+                По умолчанию: <code>&lt;project&gt;/builds</code></span>
+            </label>
+            <input x-model="serverSettings.builds_dir"
+              @input.debounce.800ms="saveServerSettings()"
+              placeholder="/data/netos/builds  (пусто = по умолчанию)">
+            <div x-show="serverSettings.builds_dir_effective"
+              class="path-hint hint-ok"
+              x-text="'→ ' + serverSettings.builds_dir_effective"></div>
+          </div>
+
           <!-- Image output dir -->
           <div class="field">
             <label>Директория вывода образа
@@ -886,6 +900,7 @@ function app() {
     evictForm: { dir:'all', max_entries:'', max_age_days:'', max_size_mb:'', dry_run:false },
     evicting: false,
     pathStats: {},
+    serverSettings: { builds_dir: '', builds_dir_effective: '' },
     showDefconfig: false,
     defconfigText: '',
     defconfigLoading: false,
@@ -908,6 +923,7 @@ function app() {
       this.refreshCache()
       this.refreshArtifactCache()
       this.loadBuilds()
+      this.loadServerSettings()
       this.$watch('step', v => { if (v === 6) this.loadBuilds() })
     },
 
@@ -1187,6 +1203,28 @@ function app() {
       if (!iso) return ''
       const d = new Date(iso)
       return d.toLocaleDateString('ru-RU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+    },
+
+    async loadServerSettings() {
+      try {
+        const r = await fetch('/api/settings')
+        if (r.ok) this.serverSettings = await r.json()
+      } catch {}
+    },
+
+    async saveServerSettings() {
+      try {
+        const r = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ builds_dir: this.serverSettings.builds_dir || '' }),
+        })
+        if (r.ok) {
+          const data = await r.json()
+          this.serverSettings.builds_dir_effective = data.builds_dir_effective
+          this.loadBuilds()
+        }
+      } catch {}
     },
 
     async statPath(field, value) {

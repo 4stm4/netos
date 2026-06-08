@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,13 +12,20 @@ from src.configurator.routes.builds import router as builds_router
 from src.configurator.routes.cache import router as cache_router
 from src.configurator.routes.fs import router as fs_router
 from src.configurator.routes.presets import router as presets_router
+from src.configurator.routes.settings import router as settings_router, apply_saved_settings
 
 _HERE = Path(__file__).parent
 _INDEX_HTML = _HERE / "templates" / "index.html"
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    apply_saved_settings()
+    yield
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="netOS Build Configurator", version="0.1.0")
+    app = FastAPI(title="netOS Build Configurator", version="0.1.0", lifespan=_lifespan)
 
     app.include_router(targets_router, prefix="/api")
     app.include_router(packages_router, prefix="/api")
@@ -26,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(cache_router, prefix="/api")
     app.include_router(fs_router, prefix="/api")
     app.include_router(presets_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api")
 
     app.mount("/static", StaticFiles(directory=str(_HERE / "static")), name="static")
 
