@@ -47,8 +47,10 @@ def _buildroot_dl_dir() -> Optional[Path]:
 
 def _buildroot_version() -> Optional[str]:
     temp = PROJECT_ROOT / "temp"
-    for d in sorted(temp.glob("buildroot-*"), reverse=True):
-        if (d / "Makefile").exists() or (d / "dl").exists():
+    # match only versioned dirs like buildroot-2026.02.1, not buildroot-output-*
+    import re
+    for d in sorted(temp.glob("buildroot-[0-9]*"), reverse=True):
+        if re.match(r"buildroot-\d{4}\.\d+", d.name) and d.is_dir():
             return d.name.replace("buildroot-", "")
     return None
 
@@ -168,12 +170,12 @@ def pkg_cache_status():
     # kernel status
     temp = PROJECT_ROOT / "temp"
     rpi_kernels = [
-        {"branch": p.stem.replace("rpi_linux-", ""), "path": str(p), "size": _fmt_size(p.stat().st_size)}
+        {"branch": p.name.replace("rpi_linux-", "").replace(".tar.gz", ""), "path": str(p), "size": _fmt_size(p.stat().st_size)}
         for p in sorted(temp.glob("rpi_linux-*.tar.gz"))
         if p.is_file()
     ]
     mainline_kernels = [
-        {"version": p.stem.replace("linux-", "").replace(".tar", ""), "path": str(p), "size": _fmt_size(p.stat().st_size)}
+        {"version": p.name.replace("linux-", "").replace(".tar.xz", ""), "path": str(p), "size": _fmt_size(p.stat().st_size)}
         for p in sorted(temp.glob("linux-*.tar.xz"))
         if p.is_file()
     ]
