@@ -539,115 +539,132 @@
 
     </div>
 
-    <!-- ── Steps 4/5/6: Опции / Модули / Драйверы ────────────────
-         Shared template — rendered for step 4 (options), 5 (modules), 6 (drivers)
-    ─────────────────────────────────────────────────────────────── -->
-    <template x-for="(kcfg) in [
-      { step: 4, section: 'options',  field: 'options',  title: 'Опции ядра',
-        hint: 'Подсистемы и фичи, встроенные в ядро (=y). Влияют на размер Image.' },
-      { step: 5, section: 'modules',  field: 'modules',  title: 'Модули ядра',
-        hint: 'Загружаемые модули (=m). Не увеличивают Image, грузятся при необходимости.' },
-      { step: 6, section: 'drivers',  field: 'drivers',  title: 'Драйверы',
-        hint: 'Драйверы оборудования (=y встроен / =m модуль).' }
+    <!-- ── Steps 4/5/6: Опции / Модули / Драйверы ─────────────── -->
+    <template x-for="kcfg in [
+      { step:4, valFilter:'y', field:'options', hint:'Встроены в ядро (=y)' },
+      { step:5, valFilter:'m', field:'modules', hint:'Загружаемые модули (=m)' },
+      { step:6, valFilter:'',  field:'drivers', hint:'Всё оборудование (=y и =m)' }
     ]" :key="kcfg.step">
-      <div class="step-body step-sections" x-show="step === kcfg.step">
+      <div class="step-body kbrowser-layout" x-show="step === kcfg.step">
 
-        <!-- hint + defconfig status bar -->
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-          <span style="font-size:13px;color:var(--muted)" x-text="kcfg.hint"></span>
-          <template x-if="kdefconfigLoading">
-            <span style="font-size:12px;color:var(--muted)">⏳ Загружаем defconfig…</span>
-          </template>
-          <template x-if="!kdefconfigLoading && kdefconfigOk">
-            <span style="font-size:12px;color:var(--ok)">
-              ✓ defconfig загружен
-              (<span x-text="kdefconfigTotal"></span> опций)
-            </span>
-          </template>
-          <template x-if="!kdefconfigLoading && !kdefconfigOk">
-            <span style="font-size:12px;color:var(--warn)">⚠ defconfig недоступен — фильтр отключён</span>
-          </template>
-          <label x-show="kdefconfigOk" style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;margin-left:auto">
-            <input type="checkbox" x-model="kshowDefaults">
-            показать уже включённые в defconfig
-          </label>
+        <!-- ── toolbar ── -->
+        <div class="kbrowser-toolbar">
+          <!-- status -->
+          <span x-show="kdefconfigLoading" style="font-size:12px;color:var(--muted)">⏳ Загружаем defconfig…</span>
+          <span x-show="!kdefconfigLoading && kdefconfigOk" style="font-size:12px;color:var(--ok)"
+            x-text="'✓ ' + kdefconfigTotal + ' опций из defconfig'"></span>
+          <span x-show="!kdefconfigLoading && !kdefconfigOk" style="font-size:12px;color:var(--warn)">⚠ defconfig недоступен</span>
+          <span style="font-size:12px;color:var(--muted)" x-text="kcfg.hint"></span>
+
+          <!-- search -->
+          <input class="kbrowser-search"
+            x-model="ksearch"
+            placeholder="поиск CONFIG_… или ключевое слово"
+            style="flex:1;min-width:180px">
+
+          <!-- value filter buttons -->
+          <div style="display:flex;gap:4px">
+            <button class="btn-sm" :class="{active: kvalFilter===''}"
+              @click="kvalFilter=''; kbrowseSection=kcfg.valFilter">все</button>
+            <button class="btn-sm" :class="{active: kvalFilter==='y'}"
+              @click="kvalFilter='y'">built-in =y</button>
+            <button class="btn-sm" :class="{active: kvalFilter==='m'}"
+              @click="kvalFilter='m'">module =m</button>
+            <button class="btn-sm" :class="{active: kvalFilter==='n'}"
+              @click="kvalFilter='n'">disabled =n</button>
+          </div>
         </div>
 
-        <!-- loading -->
-        <div x-show="kcatalogLoading" style="color:var(--muted);padding:12px 0">Загружаем каталог…</div>
+        <!-- ── two-column: categories + items ── -->
+        <div class="kbrowser-body">
 
-        <!-- categories -->
-        <template x-for="cat in (kcatalog[kcfg.section] || [])" :key="cat.category">
-          <template x-if="cat.items.some(i => kshowDefaults || !inDefconfig(i.config))">
-            <section>
-              <div class="section-label">
+          <!-- category sidebar -->
+          <div class="kbrowser-cats">
+            <div class="kbrowser-cat-item"
+              :class="{active: kselCat === null}"
+              @click="kselCat = null">
+              Все
+              <span class="kbrowser-cat-count" x-text="kbrowseFiltered.reduce((s,c)=>s+c.items.length,0)"></span>
+            </div>
+            <template x-for="cat in kbrowseFiltered" :key="cat.category">
+              <div class="kbrowser-cat-item"
+                :class="{active: kselCat === cat.category}"
+                @click="kselCat = cat.category">
                 <span x-text="cat.category"></span>
-                <span x-show="kdefconfigOk" style="font-weight:400;color:var(--muted);font-size:12px;margin-left:8px"
-                  x-text="'(' + cat.items.filter(i => inDefconfig(i.config)).length + ' уже в defconfig)'">
-                </span>
+                <span class="kbrowser-cat-count" x-text="cat.items.length"></span>
               </div>
-              <div class="kcatalog-grid">
-                <template x-for="item in cat.items" :key="item.key">
-                  <template x-if="kshowDefaults || !inDefconfig(item.config)">
-                    <label class="kcatalog-item"
-                      :class="{
-                        active:   profile.kernel[kcfg.field].includes(item.config),
-                        'k-indef': inDefconfig(item.config),
-                        'k-disabled-cfg': defconfigVal(item.config) === 'n'
-                      }">
-                      <input type="checkbox"
-                        :checked="profile.kernel[kcfg.field].includes(item.config)"
-                        :disabled="inDefconfig(item.config)"
-                        @change="toggleKernelConfig(kcfg.field, item.config, $event.target.checked)">
-                      <div class="kcatalog-body">
-                        <div class="kcatalog-label">
-                          <span x-text="item.label"></span>
-                          <span x-show="inDefconfig(item.config)"
-                            class="k-badge badge-lts" style="margin-left:6px">уже в ядре</span>
-                          <span x-show="defconfigVal(item.config) === 'n'"
-                            class="k-badge badge-eol" style="margin-left:6px">отключён в defconfig</span>
-                        </div>
-                        <div class="kcatalog-config mono" x-text="item.config"></div>
-                        <div class="kcatalog-desc" x-text="item.description"></div>
-                      </div>
-                    </label>
-                  </template>
-                </template>
-              </div>
-            </section>
-          </template>
-        </template>
-
-        <!-- selected summary -->
-        <section x-show="profile.kernel[kcfg.field].length > 0">
-          <div class="section-label">Выбрано
-            <span x-text="'(' + profile.kernel[kcfg.field].length + ')'"></span>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-            <template x-for="cfg in profile.kernel[kcfg.field]" :key="cfg">
-              <span class="config-chip">
-                <span class="mono" x-text="cfg"></span>
-                <button @click="toggleKernelConfig(kcfg.field, cfg, false)"
-                  style="background:none;border:none;cursor:pointer;color:var(--fg-3);padding:0 0 0 4px;font-size:13px">✕</button>
-              </span>
             </template>
           </div>
-        </section>
 
-        <!-- manual input -->
-        <section>
-          <div class="section-label">Добавить вручную</div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <input :id="'manual-cfg-' + kcfg.step"
-              placeholder="CONFIG_FOO=y"
-              style="flex:1;font-family:var(--mono);font-size:13px"
-              @keydown.enter="addManualKernelConfig(kcfg.field, $event.target); $event.target.value=''">
-            <button class="btn-sm"
-              @click="addManualKernelConfig(kcfg.field, document.getElementById('manual-cfg-' + kcfg.step)); document.getElementById('manual-cfg-' + kcfg.step).value=''">
-              + Добавить
-            </button>
+          <!-- items list -->
+          <div class="kbrowser-items" x-ref="kitemsPane">
+            <div x-show="kbrowseLoading" style="padding:20px;color:var(--muted)">Загружаем…</div>
+            <div x-show="!kbrowseLoading && kbrowseVisible.length === 0"
+              style="padding:20px;color:var(--muted)">Ничего не найдено</div>
+
+            <template x-for="cat in kbrowseVisible" :key="cat.category">
+              <div>
+                <div class="kbrowser-cat-header" x-text="cat.category"></div>
+                <template x-for="item in cat.items" :key="item.key">
+                  <label class="kbrowser-row"
+                    :class="{
+                      'krow-y':      item.value === 'y',
+                      'krow-m':      item.value === 'm',
+                      'krow-n':      item.value === 'n',
+                      'krow-active': profile.kernel[kcfg.field].includes(item.key + '=y') ||
+                                     profile.kernel[kcfg.field].includes(item.key + '=m') ||
+                                     profile.kernel[kcfg.field].some(c=>c.startsWith(item.key+'='))
+                    }">
+                    <!-- current defconfig state badge -->
+                    <span class="krow-badge"
+                      :class="item.value==='y' ? 'kbadge-y' : item.value==='m' ? 'kbadge-m' : 'kbadge-n'"
+                      x-text="item.value==='n' ? 'off' : item.value"></span>
+
+                    <!-- key -->
+                    <span class="krow-key mono" x-text="item.key"></span>
+
+                    <!-- override buttons -->
+                    <div class="krow-btns">
+                      <button class="krow-btn"
+                        :class="{sel: profile.kernel[kcfg.field].includes(item.key+'=y')}"
+                        @click.prevent="ksetOverride(kcfg.field, item.key, 'y')"
+                        title="форсировать =y (built-in)">y</button>
+                      <button class="krow-btn"
+                        :class="{sel: profile.kernel[kcfg.field].includes(item.key+'=m')}"
+                        @click.prevent="ksetOverride(kcfg.field, item.key, 'm')"
+                        title="форсировать =m (module)">m</button>
+                      <button class="krow-btn krow-btn-n"
+                        :class="{sel: profile.kernel[kcfg.field].some(c=>c===('# '+item.key+' is not set'))}"
+                        @click.prevent="ksetOverride(kcfg.field, item.key, 'n')"
+                        title="отключить">n</button>
+                      <button class="krow-btn-clr"
+                        x-show="profile.kernel[kcfg.field].some(c=>c.startsWith(item.key+'=') || c===('# '+item.key+' is not set'))"
+                        @click.prevent="kclearOverride(kcfg.field, item.key)"
+                        title="сбросить переопределение">✕</button>
+                    </div>
+                  </label>
+                </template>
+              </div>
+            </template>
           </div>
-        </section>
+
+        </div><!-- /kbrowser-body -->
+
+        <!-- ── overrides summary ── -->
+        <div class="kbrowser-footer" x-show="profile.kernel[kcfg.field].length > 0">
+          <span style="font-size:12px;color:var(--muted)">Переопределения:</span>
+          <template x-for="cfg in profile.kernel[kcfg.field]" :key="cfg">
+            <span class="config-chip">
+              <span class="mono" x-text="cfg"></span>
+              <button @click="kclearOverride(kcfg.field, cfg.split('=')[0])"
+                style="background:none;border:none;cursor:pointer;color:var(--fg-3);padding:0 0 0 3px">✕</button>
+            </span>
+          </template>
+          <!-- manual add -->
+          <input style="font-family:var(--mono);font-size:12px;width:180px"
+            placeholder="CONFIG_FOO=y"
+            @keydown.enter="addManualKernelConfig(kcfg.field,$event.target);$event.target.value=''">
+        </div>
 
       </div>
     </template>
@@ -1118,13 +1135,16 @@ function app() {
     kernelLoading: false,
     kernelReleases: [],
     kernelBranches: [],
-    kcatalog: { options: [], modules: [], drivers: [] },
-    kcatalogLoading: false,
-    kdefconfig: {},          // { CONFIG_FOO: 'y'|'m'|'n' }
+    kdefconfig: {},
     kdefconfigLoading: false,
     kdefconfigOk: false,
     kdefconfigTotal: 0,
-    kshowDefaults: false,    // toggle: show items already in defconfig
+    kbrowseData: [],          // full categorised data from /browse
+    kbrowseLoading: false,
+    kbrowseSection: '',       // current step's valFilter
+    ksearch: '',
+    kvalFilter: '',           // '', 'y', 'm', 'n'
+    kselCat: null,            // selected category name or null = all
     showDefconfig: false,
     defconfigText: '',
     defconfigLoading: false,
@@ -1151,9 +1171,9 @@ function app() {
       this.$watch('step', v => {
         if (v === 10) this.loadBuilds()
         if (v === 3) this.loadKernelVersions()
-        if (v === 4) { this.loadDefconfig(); this.loadKernelCatalog('options') }
-        if (v === 5) { this.loadDefconfig(); this.loadKernelCatalog('modules') }
-        if (v === 6) { this.loadDefconfig(); this.loadKernelCatalog('drivers') }
+        if (v === 4) { this.kvalFilter='y'; this.ksearch=''; this.kselCat=null; this.loadDefconfig(); this.loadBrowse('y') }
+        if (v === 5) { this.kvalFilter='m'; this.ksearch=''; this.kselCat=null; this.loadDefconfig(); this.loadBrowse('m') }
+        if (v === 6) { this.kvalFilter='';  this.ksearch=''; this.kselCat=null; this.loadDefconfig(); this.loadBrowse('') }
       })
     },
 
@@ -1204,7 +1224,7 @@ function app() {
       // reset kernel selections when target changes
       this.profile.kernel = { rpi_branch: '', mainline_version: '', options: [], modules: [], drivers: [] }
       this.kernelData = null; this.kernelReleases = []; this.kernelBranches = []
-      this.kcatalog = { options: [], modules: [], drivers: [] }
+      this.kbrowseData = []; this.kbrowseSection = ''
       this.kdefconfig = {}; this.kdefconfigOk = false; this.kdefconfigTotal = 0
     },
 
@@ -1467,6 +1487,58 @@ function app() {
       this.kernelLoading = false
     },
 
+    // ── computed browse views ──────────────────────────────────────
+    get kbrowseFiltered() {
+      const vf = this.kvalFilter
+      const sq = this.ksearch.trim().toLowerCase()
+      return this.kbrowseData
+        .map(cat => ({
+          ...cat,
+          items: cat.items.filter(i => {
+            if (vf && i.value !== vf) return false
+            if (sq && !i.key.toLowerCase().includes(sq)) return false
+            return true
+          })
+        }))
+        .filter(cat => cat.items.length > 0)
+    },
+
+    get kbrowseVisible() {
+      if (this.kselCat === null) return this.kbrowseFiltered
+      return this.kbrowseFiltered.filter(c => c.category === this.kselCat)
+    },
+
+    async loadBrowse(valFilter) {
+      if (this.kbrowseData.length && this.kbrowseSection === valFilter) return
+      this.kbrowseLoading = true
+      this.kbrowseSection = valFilter
+      const branch  = this.profile.kernel.rpi_branch || ''
+      const version = this.profile.kernel.mainline_version || ''
+      const params  = new URLSearchParams({ target: this.profile.target, branch, version, section: 'all' })
+      try {
+        const r = await fetch(`/api/kernel-config/browse?${params}`)
+        if (r.ok) this.kbrowseData = await r.json()
+      } catch {}
+      this.kbrowseLoading = false
+    },
+
+    ksetOverride(field, key, val) {
+      // remove any existing override for this key
+      this.profile.kernel[field] = this.profile.kernel[field]
+        .filter(c => !c.startsWith(key + '=') && c !== ('# ' + key + ' is not set'))
+      if (val === 'n') {
+        this.profile.kernel[field].push('# ' + key + ' is not set')
+      } else {
+        this.profile.kernel[field].push(key + '=' + val)
+      }
+    },
+
+    kclearOverride(field, key) {
+      const k = key.startsWith('CONFIG_') ? key : key.split('=')[0]
+      this.profile.kernel[field] = this.profile.kernel[field]
+        .filter(c => !c.startsWith(k + '=') && c !== ('# ' + k + ' is not set'))
+    },
+
     async loadDefconfig() {
       if (this.kdefconfigOk) return  // already loaded for current target
       this.kdefconfigLoading = true
@@ -1501,20 +1573,6 @@ function app() {
       return false
     },
 
-    async loadKernelCatalog(section) {
-      // load defconfig first (lazy, once per target+version combo)
-      await this.loadDefconfig()
-      if (this.kcatalog[section]?.length) return  // catalog already loaded
-      this.kcatalogLoading = true
-      try {
-        const r = await fetch(`/api/kernel-catalog/${section}`)
-        if (r.ok) {
-          const data = await r.json()
-          this.kcatalog = { ...this.kcatalog, [section]: data }
-        }
-      } catch {}
-      this.kcatalogLoading = false
-    },
 
     toggleKernelConfig(field, config, checked) {
       if (checked) {

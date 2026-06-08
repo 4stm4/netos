@@ -752,3 +752,118 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
   border-color: color-mix(in srgb, var(--err) 30%, var(--border));
   background: color-mix(in srgb, var(--err) 4%, var(--bg-1));
 }
+
+/* ── Kernel browser (steps 4/5/6) ──────────────────────────────────────── */
+.kbrowser-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px);
+  gap: 8px;
+}
+.kbrowser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.kbrowser-search {
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.kbrowser-body {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.kbrowser-cats {
+  width: 170px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--bg-1);
+  padding: 4px 0;
+}
+.kbrowser-cat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--fg-2);
+  border-radius: 0;
+  transition: background .1s, color .1s;
+}
+.kbrowser-cat-item:hover { background: var(--bg-2); color: var(--fg); }
+.kbrowser-cat-item.active { background: color-mix(in srgb,var(--accent) 15%,var(--bg-1)); color: var(--accent); font-weight: 600; }
+.kbrowser-cat-count { font-size: 10px; background: var(--bg-2); border-radius: 10px; padding: 1px 5px; color: var(--fg-3); }
+.kbrowser-items {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg);
+}
+.kbrowser-cat-header {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--fg-3);
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.kbrowser-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid color-mix(in srgb,var(--border) 50%,transparent);
+  cursor: pointer;
+  transition: background .1s;
+}
+.kbrowser-row:hover { background: var(--bg-1); }
+.kbrowser-row.krow-active { background: color-mix(in srgb,var(--accent) 8%,var(--bg)); }
+.krow-badge {
+  font-size: 10px; font-weight:700; font-family: var(--mono);
+  padding: 1px 4px; border-radius: 3px; flex-shrink: 0; min-width: 22px; text-align:center;
+}
+.kbadge-y { background: color-mix(in srgb,var(--ok) 20%,transparent);   color: var(--ok); }
+.kbadge-m { background: color-mix(in srgb,var(--info) 20%,transparent); color: var(--info); }
+.kbadge-n { background: color-mix(in srgb,var(--err) 12%,transparent);  color: var(--fg-3); }
+.krow-key { font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.krow-btns { display: flex; gap: 3px; flex-shrink: 0; }
+.krow-btn {
+  font-size: 11px; font-weight: 600; font-family: var(--mono);
+  padding: 1px 6px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-1); color: var(--fg-2);
+  transition: background .1s, color .1s, border-color .1s;
+}
+.krow-btn:hover { border-color: var(--accent); color: var(--accent); }
+.krow-btn.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+.krow-btn-n.sel { background: var(--err); color: #fff; border-color: var(--err); }
+.krow-btn-clr {
+  font-size: 11px; padding: 1px 5px; border: none; background: none;
+  color: var(--fg-3); cursor: pointer; border-radius: 4px;
+}
+.krow-btn-clr:hover { color: var(--err); background: color-mix(in srgb,var(--err) 10%,transparent); }
+.kbrowser-footer {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 6px 10px; background: var(--bg-1);
+  border: 1px solid var(--border); border-radius: 8px;
+  flex-shrink: 0; min-height: 38px;
+}
