@@ -453,10 +453,10 @@
     <!-- ── Step 3: Ядро Linux ─────────────────────────────────── -->
     <div class="step-body step-sections" x-show="step === 3">
 
-      <!-- Mainline (kernel.org) -->
-      <section x-show="targets[profile.target]?.kernel_source === 'mainline'">
-        <div class="section-label">Версия ядра Linux
-          <span style="font-weight:400;color:var(--muted);margin-left:6px">— данные с kernel.org</span>
+      <!-- Mainline (kernel.org) — shown for all targets -->
+      <section>
+        <div class="section-label">Mainline ядро (kernel.org)
+          <span style="font-weight:400;color:var(--muted);margin-left:6px">— 6.x, 7.x и выше для любого target</span>
         </div>
         <div x-show="kernelLoading" style="color:var(--muted);padding:8px 0">Загружаем версии…</div>
         <div x-show="!kernelLoading && kernelReleases.length === 0" style="color:var(--err);padding:8px 0">
@@ -486,18 +486,22 @@
             </button>
           </template>
         </div>
-        <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
+        <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <label style="font-size:13px;color:var(--muted)">Выбрано:</label>
-          <code style="font-size:13px" x-text="profile.kernel.mainline_version || ('по умолчанию (' + (kernelData?.default_version || '6.12.27') + ')')"></code>
+          <code style="font-size:13px" x-text="profile.kernel.mainline_version || 'не выбрано'"></code>
           <button class="btn-sm" x-show="profile.kernel.mainline_version"
             @click="profile.kernel.mainline_version = ''">✕ сбросить</button>
+          <span x-show="profile.kernel.mainline_version && (targets[profile.target]?.kernel_source === 'rpi' || !targets[profile.target]?.kernel_source)"
+                style="font-size:11px;color:#facc15;background:rgba(250,204,21,0.1);padding:2px 8px;border-radius:4px">
+            ⚠ Mainline на RPi — сборка займёт больше времени
+          </span>
         </div>
       </section>
 
       <!-- RPi branches (github.com/raspberrypi/linux) -->
       <section x-show="targets[profile.target]?.kernel_source === 'rpi' || !targets[profile.target]?.kernel_source">
-        <div class="section-label">Ветка ядра Raspberry Pi
-          <span style="font-weight:400;color:var(--muted);margin-left:6px">— github.com/raspberrypi/linux</span>
+        <div class="section-label">RPi ветка (github.com/raspberrypi/linux)
+          <span style="font-weight:400;color:var(--muted);margin-left:6px">— оптимизированы под RPi железо</span>
         </div>
         <div x-show="kernelLoading" style="color:var(--muted);padding:8px 0">Загружаем ветки…</div>
         <div class="kernel-grid" x-show="!kernelLoading">
@@ -532,11 +536,11 @@
           <span style="font-weight:400;color:var(--muted);margin-left:6px">— переопределяет выбор выше</span>
         </div>
         <div class="form-grid" style="margin-top:8px">
-          <div class="field" x-show="targets[profile.target]?.kernel_source === 'mainline'">
+          <div class="field">
             <label>Версия mainline
-              <span class="field-hint">Например: <code>6.6.87</code></span>
+              <span class="field-hint">Например: <code>7.0.11</code> или <code>6.12.92</code></span>
             </label>
-            <input x-model="profile.kernel.mainline_version" placeholder="6.12.27  (пусто = по умолчанию)">
+            <input x-model="profile.kernel.mainline_version" placeholder="пусто = RPi ветка / дефолт">
           </div>
           <div class="field" x-show="targets[profile.target]?.kernel_source === 'rpi' || !targets[profile.target]?.kernel_source">
             <label>Ветка RPi

@@ -63,7 +63,8 @@ class LinuxKernel:
     ):
         self.temp_path = Path(temp_path)
         self.rpi_model = rpi_model
-        self.kernel_source = kernel_source
+        # NETOS_KERNEL_SOURCE=mainline allows mainline kernel on any target (e.g. RPi)
+        self.kernel_source = _env("NETOS_KERNEL_SOURCE", kernel_source) or kernel_source
         self.kernel_arch = kernel_arch
         self.cross_compile = cross_compile
         subdir = "mainline_linux" if kernel_source == "mainline" else "rpi_linux"

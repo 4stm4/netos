@@ -76,6 +76,8 @@ def profile_to_env(profile: Profile) -> dict[str, str]:
         env["NETOS_KERNEL_BRANCH"] = profile.kernel.rpi_branch
     if profile.kernel.mainline_version:
         env["NETOS_MAINLINE_KERNEL_VERSION"] = profile.kernel.mainline_version
+        # switch kernel build to mainline mode even for RPi targets
+        env["NETOS_KERNEL_SOURCE"] = "mainline"
 
     # kernel CONFIG_* lines (options + modules + drivers combined)
     all_config = list(profile.kernel.options) + list(profile.kernel.modules) + list(profile.kernel.drivers)
