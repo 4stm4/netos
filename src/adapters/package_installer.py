@@ -53,9 +53,10 @@ def install_dependencies(kernel_arch: str = "arm64") -> None:
         "unzip",
         "tar",
         "gzip",
-        "bzip2",
         "xz-utils",
-        "zstd",
+        # bzip2 and zstd omitted: Ubuntu Noble security patches break exact-version
+        # deps for these packages; they are already present on any modern Ubuntu
+        # system and Buildroot supplies its own copies anyway.
         # disk image creation and local QEMU checks
         "fdisk",
         "dosfstools",
@@ -73,7 +74,8 @@ def install_dependencies(kernel_arch: str = "arm64") -> None:
                 # Linux kernel build
                 "libncurses-dev",
                 "libssl-dev",
-                "libelf-dev",
+                # libelf-dev pulls in zlib1g-dev which conflicts on Ubuntu Noble
+                # security patches; Buildroot cross-compiler doesn't need it on host
                 "bc",
                 "bison",
                 "flex",
