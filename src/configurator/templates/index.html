@@ -552,37 +552,70 @@
     ]" :key="kcfg.step">
       <div class="step-body step-sections" x-show="step === kcfg.step">
 
-        <!-- hint -->
-        <div style="font-size:13px;color:var(--muted);margin-bottom:6px" x-text="kcfg.hint"></div>
+        <!-- hint + defconfig status bar -->
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <span style="font-size:13px;color:var(--muted)" x-text="kcfg.hint"></span>
+          <template x-if="kdefconfigLoading">
+            <span style="font-size:12px;color:var(--muted)">⏳ Загружаем defconfig…</span>
+          </template>
+          <template x-if="!kdefconfigLoading && kdefconfigOk">
+            <span style="font-size:12px;color:var(--ok)">
+              ✓ defconfig загружен
+              (<span x-text="kdefconfigTotal"></span> опций)
+            </span>
+          </template>
+          <template x-if="!kdefconfigLoading && !kdefconfigOk">
+            <span style="font-size:12px;color:var(--warn)">⚠ defconfig недоступен — фильтр отключён</span>
+          </template>
+          <label x-show="kdefconfigOk" style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;margin-left:auto">
+            <input type="checkbox" x-model="kshowDefaults">
+            показать уже включённые в defconfig
+          </label>
+        </div>
 
         <!-- loading -->
         <div x-show="kcatalogLoading" style="color:var(--muted);padding:12px 0">Загружаем каталог…</div>
 
         <!-- categories -->
         <template x-for="cat in (kcatalog[kcfg.section] || [])" :key="cat.category">
-          <section>
-            <div class="section-label" x-text="cat.category"></div>
-            <div class="kcatalog-grid">
-              <template x-for="item in cat.items" :key="item.key">
-                <label class="kcatalog-item"
-                  :class="{ active: profile.kernel[kcfg.field].includes(item.config),
-                             default: (item.default_targets || []).includes(profile.target) }">
-                  <input type="checkbox"
-                    :checked="profile.kernel[kcfg.field].includes(item.config)"
-                    @change="toggleKernelConfig(kcfg.field, item.config, $event.target.checked)">
-                  <div class="kcatalog-body">
-                    <div class="kcatalog-label">
-                      <span x-text="item.label"></span>
-                      <span x-show="(item.default_targets || []).includes(profile.target)"
-                        class="k-badge badge-lts" style="margin-left:6px">target default</span>
-                    </div>
-                    <div class="kcatalog-config mono" x-text="item.config"></div>
-                    <div class="kcatalog-desc" x-text="item.description"></div>
-                  </div>
-                </label>
-              </template>
-            </div>
-          </section>
+          <template x-if="cat.items.some(i => kshowDefaults || !inDefconfig(i.config))">
+            <section>
+              <div class="section-label">
+                <span x-text="cat.category"></span>
+                <span x-show="kdefconfigOk" style="font-weight:400;color:var(--muted);font-size:12px;margin-left:8px"
+                  x-text="'(' + cat.items.filter(i => inDefconfig(i.config)).length + ' уже в defconfig)'">
+                </span>
+              </div>
+              <div class="kcatalog-grid">
+                <template x-for="item in cat.items" :key="item.key">
+                  <template x-if="kshowDefaults || !inDefconfig(item.config)">
+                    <label class="kcatalog-item"
+                      :class="{
+                        active:   profile.kernel[kcfg.field].includes(item.config),
+                        'k-indef': inDefconfig(item.config),
+                        'k-disabled-cfg': defconfigVal(item.config) === 'n'
+                      }">
+                      <input type="checkbox"
+                        :checked="profile.kernel[kcfg.field].includes(item.config)"
+                        :disabled="inDefconfig(item.config)"
+                        @change="toggleKernelConfig(kcfg.field, item.config, $event.target.checked)">
+                      <div class="kcatalog-body">
+                        <div class="kcatalog-label">
+                          <span x-text="item.label"></span>
+                          <span x-show="inDefconfig(item.config)"
+                            class="k-badge badge-lts" style="margin-left:6px">уже в ядре</span>
+                          <span x-show="defconfigVal(item.config) === 'n'"
+                            class="k-badge badge-eol" style="margin-left:6px">отключён в defconfig</span>
+                        </div>
+                        <div class="kcatalog-config mono" x-text="item.config"></div>
+                        <div class="kcatalog-desc" x-text="item.description"></div>
+                      </div>
+                    </label>
+                  </template>
+                </template>
+              </div>
+            </section>
+          </template>
         </template>
 
         <!-- selected summary -->
@@ -1087,6 +1120,11 @@ function app() {
     kernelBranches: [],
     kcatalog: { options: [], modules: [], drivers: [] },
     kcatalogLoading: false,
+    kdefconfig: {},          // { CONFIG_FOO: 'y'|'m'|'n' }
+    kdefconfigLoading: false,
+    kdefconfigOk: false,
+    kdefconfigTotal: 0,
+    kshowDefaults: false,    // toggle: show items already in defconfig
     showDefconfig: false,
     defconfigText: '',
     defconfigLoading: false,
@@ -1113,9 +1151,9 @@ function app() {
       this.$watch('step', v => {
         if (v === 10) this.loadBuilds()
         if (v === 3) this.loadKernelVersions()
-        if (v === 4) this.loadKernelCatalog('options')
-        if (v === 5) this.loadKernelCatalog('modules')
-        if (v === 6) this.loadKernelCatalog('drivers')
+        if (v === 4) { this.loadDefconfig(); this.loadKernelCatalog('options') }
+        if (v === 5) { this.loadDefconfig(); this.loadKernelCatalog('modules') }
+        if (v === 6) { this.loadDefconfig(); this.loadKernelCatalog('drivers') }
       })
     },
 
@@ -1167,6 +1205,7 @@ function app() {
       this.profile.kernel = { rpi_branch: '', mainline_version: '', options: [], modules: [], drivers: [] }
       this.kernelData = null; this.kernelReleases = []; this.kernelBranches = []
       this.kcatalog = { options: [], modules: [], drivers: [] }
+      this.kdefconfig = {}; this.kdefconfigOk = false; this.kdefconfigTotal = 0
     },
 
     applyPreset(p) {
@@ -1428,8 +1467,44 @@ function app() {
       this.kernelLoading = false
     },
 
+    async loadDefconfig() {
+      if (this.kdefconfigOk) return  // already loaded for current target
+      this.kdefconfigLoading = true
+      const branch  = this.profile.kernel.rpi_branch  || ''
+      const version = this.profile.kernel.mainline_version || ''
+      try {
+        const params = new URLSearchParams({ target: this.profile.target, branch, version })
+        const r = await fetch(`/api/kernel-config/defconfig?${params}`)
+        if (r.ok) {
+          const d = await r.json()
+          this.kdefconfig     = d.config || {}
+          this.kdefconfigOk   = d.ok
+          this.kdefconfigTotal = d.total || 0
+        }
+      } catch {}
+      this.kdefconfigLoading = false
+    },
+
+    // returns 'y'|'m'|'n'|'' ('' = not mentioned)
+    defconfigVal(configLine) {
+      const key = configLine.split('=')[0]
+      return this.kdefconfig[key] ?? ''
+    },
+
+    // true if item is already covered by defconfig at the same or stronger level
+    inDefconfig(configLine) {
+      const val = this.defconfigVal(configLine)
+      const wanted = configLine.split('=')[1] || 'y'
+      if (!val || val === 'n') return false
+      if (val === 'y') return true                 // built-in covers both y and m
+      if (val === 'm' && wanted === 'm') return true
+      return false
+    },
+
     async loadKernelCatalog(section) {
-      if (this.kcatalog[section]?.length) return  // already loaded
+      // load defconfig first (lazy, once per target+version combo)
+      await this.loadDefconfig()
+      if (this.kcatalog[section]?.length) return  // catalog already loaded
       this.kcatalogLoading = true
       try {
         const r = await fetch(`/api/kernel-catalog/${section}`)

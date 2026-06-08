@@ -741,3 +741,14 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: 4px; padding: 2px 6px; font-size: 12px;
 }
+
+/* already-in-defconfig item state */
+.kcatalog-item.k-indef {
+  opacity: .55;
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--border));
+  background: color-mix(in srgb, var(--ok) 4%, var(--bg-1));
+}
+.kcatalog-item.k-disabled-cfg {
+  border-color: color-mix(in srgb, var(--err) 30%, var(--border));
+  background: color-mix(in srgb, var(--err) 4%, var(--bg-1));
+}
