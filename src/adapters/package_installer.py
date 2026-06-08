@@ -84,7 +84,14 @@ def install_dependencies(kernel_arch: str = "arm64") -> None:
 
     try:
         subprocess.run(prefix + ["apt-get", "update"], check=True)
-        subprocess.run(prefix + ["apt-get", "install", "-y"] + dependencies, check=True)
+        # --fix-broken resolves held/broken packages before installing
+        # (common on Ubuntu when security patches bump library versions
+        #  but -dev packages still require the old exact version)
+        subprocess.run(prefix + ["apt-get", "install", "-f", "-y"], check=False)
+        subprocess.run(
+            prefix + ["apt-get", "install", "-y", "--fix-missing"] + dependencies,
+            check=True,
+        )
     except subprocess.CalledProcessError as e:
         logging.error(f"Ошибка при установке зависимостей сборочной VM: {e}")
         sys.exit(1)
