@@ -700,3 +700,44 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
 .badge-rc     { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
 .badge-rpi    { background: color-mix(in srgb, #c11 20%, transparent);        color: #e44; }
 .k-date, .k-eol-date { font-size: 11px; color: var(--fg-3); margin-top: 3px; }
+
+/* ── Kernel catalog (options/modules/drivers) ─────────────────────────── */
+.kcatalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+.kcatalog-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.kcatalog-item:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-1));
+}
+.kcatalog-item.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
+}
+.kcatalog-item.default:not(.active) {
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--border));
+}
+.kcatalog-item input[type=checkbox] { margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+.kcatalog-body { min-width: 0; }
+.kcatalog-label { font-size: 13px; font-weight: 500; color: var(--fg); display: flex; align-items: center; flex-wrap: wrap; }
+.kcatalog-config { font-size: 11px; color: var(--accent); margin-top: 2px; }
+.kcatalog-desc { font-size: 11px; color: var(--fg-3); margin-top: 2px; line-height: 1.4; }
+.config-chip {
+  display: inline-flex; align-items: center;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-1));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 4px; padding: 2px 6px; font-size: 12px;
+}

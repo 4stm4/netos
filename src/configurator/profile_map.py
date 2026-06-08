@@ -77,6 +77,17 @@ def profile_to_env(profile: Profile) -> dict[str, str]:
     if profile.kernel.mainline_version:
         env["NETOS_MAINLINE_KERNEL_VERSION"] = profile.kernel.mainline_version
 
+    # kernel CONFIG_* lines (options + modules + drivers combined)
+    all_config = list(profile.kernel.options) + list(profile.kernel.modules) + list(profile.kernel.drivers)
+    # deduplicate preserving order (last wins for same CONFIG key)
+    seen: dict[str, str] = {}
+    for line in all_config:
+        key = line.split("=")[0]
+        seen[key] = line
+    config_lines = list(seen.values())
+    if config_lines:
+        env["NETOS_KERNEL_CONFIG_OPTIONS"] = " ".join(config_lines)
+
     # paths
     if profile.paths.temp_dir:
         env["NETOS_TEMP_DIR"] = profile.paths.temp_dir

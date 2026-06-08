@@ -181,6 +181,8 @@ if __name__ == "__main__":
             target = get_target(profile_target)
         except ValueError as _e:
             sys.exit(str(_e))
+    elif not _target_explicit and _is_tinywifi():
+        target = get_target("zero2w")
     else:
         target = get_target(args.target)
 
@@ -221,7 +223,10 @@ if __name__ == "__main__":
         target.kernel_defconfig,
         ROOTFS_PATH,
         kernel_filename=target.kernel_filename,
-        config_options=target.kernel_config_options,
+        config_options=list(target.kernel_config_options) + [
+            opt for opt in os.environ.get("NETOS_KERNEL_CONFIG_OPTIONS", "").split()
+            if opt.startswith("CONFIG_")
+        ],
         boot_firmware_files=target.boot_firmware_files,
         build_modules=target.build_kernel_modules,
         kernel_source=target.kernel_source,

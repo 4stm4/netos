@@ -16,7 +16,7 @@
     <div class="sidebar-brand">netOS</div>
 
     <nav class="steps-nav">
-      <template x-for="(label, i) in ['Среда', 'Target', 'Ядро Linux', 'Branding & Network', 'Packages', 'Web UI & Nervum', 'Build']" :key="i">
+      <template x-for="(label, i) in ['Среда', 'Target', 'Ядро Linux', 'Опции ядра', 'Модули', 'Драйверы', 'Branding & Network', 'Packages', 'Web UI & Nervum', 'Build']" :key="i">
         <button class="step-btn"
           :class="{ active: step === i+1, done: step > i+1 }"
           @click="step = i+1; if(i===0) refreshCache()">
@@ -44,7 +44,7 @@
   <!-- ── Content ───────────────────────────────────────────────── -->
   <div class="content">
     <div class="step-header">
-      <h1 x-text="['Среда', 'Target', 'Ядро Linux', 'Branding & Network', 'Packages', 'Web UI & Nervum', 'Build'][step-1]"></h1>
+      <h1 x-text="['Среда', 'Target', 'Ядро Linux', 'Опции ядра', 'Модули', 'Драйверы', 'Branding & Network', 'Packages', 'Web UI & Nervum', 'Build'][step-1]"></h1>
     </div>
 
     <!-- ── Step 1: Среда (Preflight) ──────────────────────────── -->
@@ -539,8 +539,88 @@
 
     </div>
 
-    <!-- ── Step 4: Branding & Network ──────────────────────────── -->
-    <div class="step-body step-sections" x-show="step === 4">
+    <!-- ── Steps 4/5/6: Опции / Модули / Драйверы ────────────────
+         Shared template — rendered for step 4 (options), 5 (modules), 6 (drivers)
+    ─────────────────────────────────────────────────────────────── -->
+    <template x-for="(kcfg) in [
+      { step: 4, section: 'options',  field: 'options',  title: 'Опции ядра',
+        hint: 'Подсистемы и фичи, встроенные в ядро (=y). Влияют на размер Image.' },
+      { step: 5, section: 'modules',  field: 'modules',  title: 'Модули ядра',
+        hint: 'Загружаемые модули (=m). Не увеличивают Image, грузятся при необходимости.' },
+      { step: 6, section: 'drivers',  field: 'drivers',  title: 'Драйверы',
+        hint: 'Драйверы оборудования (=y встроен / =m модуль).' }
+    ]" :key="kcfg.step">
+      <div class="step-body step-sections" x-show="step === kcfg.step">
+
+        <!-- hint -->
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px" x-text="kcfg.hint"></div>
+
+        <!-- loading -->
+        <div x-show="kcatalogLoading" style="color:var(--muted);padding:12px 0">Загружаем каталог…</div>
+
+        <!-- categories -->
+        <template x-for="cat in (kcatalog[kcfg.section] || [])" :key="cat.category">
+          <section>
+            <div class="section-label" x-text="cat.category"></div>
+            <div class="kcatalog-grid">
+              <template x-for="item in cat.items" :key="item.key">
+                <label class="kcatalog-item"
+                  :class="{ active: profile.kernel[kcfg.field].includes(item.config),
+                             default: (item.default_targets || []).includes(profile.target) }">
+                  <input type="checkbox"
+                    :checked="profile.kernel[kcfg.field].includes(item.config)"
+                    @change="toggleKernelConfig(kcfg.field, item.config, $event.target.checked)">
+                  <div class="kcatalog-body">
+                    <div class="kcatalog-label">
+                      <span x-text="item.label"></span>
+                      <span x-show="(item.default_targets || []).includes(profile.target)"
+                        class="k-badge badge-lts" style="margin-left:6px">target default</span>
+                    </div>
+                    <div class="kcatalog-config mono" x-text="item.config"></div>
+                    <div class="kcatalog-desc" x-text="item.description"></div>
+                  </div>
+                </label>
+              </template>
+            </div>
+          </section>
+        </template>
+
+        <!-- selected summary -->
+        <section x-show="profile.kernel[kcfg.field].length > 0">
+          <div class="section-label">Выбрано
+            <span x-text="'(' + profile.kernel[kcfg.field].length + ')'"></span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+            <template x-for="cfg in profile.kernel[kcfg.field]" :key="cfg">
+              <span class="config-chip">
+                <span class="mono" x-text="cfg"></span>
+                <button @click="toggleKernelConfig(kcfg.field, cfg, false)"
+                  style="background:none;border:none;cursor:pointer;color:var(--fg-3);padding:0 0 0 4px;font-size:13px">✕</button>
+              </span>
+            </template>
+          </div>
+        </section>
+
+        <!-- manual input -->
+        <section>
+          <div class="section-label">Добавить вручную</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <input :id="'manual-cfg-' + kcfg.step"
+              placeholder="CONFIG_FOO=y"
+              style="flex:1;font-family:var(--mono);font-size:13px"
+              @keydown.enter="addManualKernelConfig(kcfg.field, $event.target); $event.target.value=''">
+            <button class="btn-sm"
+              @click="addManualKernelConfig(kcfg.field, document.getElementById('manual-cfg-' + kcfg.step)); document.getElementById('manual-cfg-' + kcfg.step).value=''">
+              + Добавить
+            </button>
+          </div>
+        </section>
+
+      </div>
+    </template>
+
+    <!-- ── Step 7: Branding & Network ──────────────────────────── -->
+    <div class="step-body step-sections" x-show="step === 7">
       <div class="card">
         <div class="card-title">Branding</div>
         <div class="form-grid">
@@ -623,7 +703,7 @@
     </div>
 
     <!-- ── Step 4: Packages ─────────────────────────────────────── -->
-    <div class="step-body pkg-layout" x-show="step === 5">
+    <div class="step-body pkg-layout" x-show="step === 8">
       <!-- Category sidebar -->
       <div class="pkg-sidebar">
         <div class="section-label" style="padding: 0 12px">Категории</div>
@@ -720,7 +800,7 @@
     </div>
 
     <!-- ── Step 5: Web UI & Nervum ──────────────────────────────── -->
-    <div class="step-body step-sections" x-show="step === 6">
+    <div class="step-body step-sections" x-show="step === 9">
       <div class="card">
         <div class="card-title">Testum Web UI</div>
         <div class="form-grid">
@@ -794,7 +874,7 @@
     </div>
 
     <!-- ── Step 6: Build ────────────────────────────────────────── -->
-    <div class="step-body build-layout" x-show="step === 7">
+    <div class="step-body build-layout" x-show="step === 10">
       <div class="build-controls">
         <div class="field">
           <label>Имя профиля</label>
@@ -849,7 +929,7 @@
     <!-- Footer nav -->
     <div class="step-footer">
       <button class="btn-secondary" @click="step--" x-show="step > 1">← Назад</button>
-      <button class="btn-primary" @click="step++" x-show="step < 7">Далее →</button>
+      <button class="btn-primary" @click="step++" x-show="step < 10">Далее →</button>
     </div>
   </div>
 </div>
@@ -962,7 +1042,7 @@ function mkProfile() {
     packages: { enabled:[], custom:[] },
     webui: { source:'git', git_url:'https://github.com/4stm4/testum.git', git_ref:'main', source_dir:'', port:8080, admin_username:'admin', admin_password:'' },
     nervum: { enabled:true, source:'git', git_url:'https://github.com/4stm4/nervum.git', git_ref:'main', source_dir:'' },
-    kernel: { rpi_branch: '', mainline_version: '' },
+    kernel: { rpi_branch: '', mainline_version: '', options: [], modules: [], drivers: [] },
   }
 }
 
@@ -1005,6 +1085,8 @@ function app() {
     kernelLoading: false,
     kernelReleases: [],
     kernelBranches: [],
+    kcatalog: { options: [], modules: [], drivers: [] },
+    kcatalogLoading: false,
     showDefconfig: false,
     defconfigText: '',
     defconfigLoading: false,
@@ -1028,7 +1110,13 @@ function app() {
       this.refreshArtifactCache()
       this.loadBuilds()
       this.loadServerSettings()
-      this.$watch('step', v => { if (v === 7) this.loadBuilds(); if (v === 3) this.loadKernelVersions() })
+      this.$watch('step', v => {
+        if (v === 10) this.loadBuilds()
+        if (v === 3) this.loadKernelVersions()
+        if (v === 4) this.loadKernelCatalog('options')
+        if (v === 5) this.loadKernelCatalog('modules')
+        if (v === 6) this.loadKernelCatalog('drivers')
+      })
     },
 
     // ── computed ───────────────────────────────────────────────
@@ -1075,9 +1163,10 @@ function app() {
       this.profile.image.size_mb = p.size_mb
       this.profile.image.boot_mb = p.boot_mb
       this.refreshCache()
-      // reset kernel selections when target changes source type
-      this.profile.kernel = { rpi_branch: '', mainline_version: '' }
+      // reset kernel selections when target changes
+      this.profile.kernel = { rpi_branch: '', mainline_version: '', options: [], modules: [], drivers: [] }
       this.kernelData = null; this.kernelReleases = []; this.kernelBranches = []
+      this.kcatalog = { options: [], modules: [], drivers: [] }
     },
 
     applyPreset(p) {
@@ -1337,6 +1426,36 @@ function app() {
         }
       } catch {}
       this.kernelLoading = false
+    },
+
+    async loadKernelCatalog(section) {
+      if (this.kcatalog[section]?.length) return  // already loaded
+      this.kcatalogLoading = true
+      try {
+        const r = await fetch(`/api/kernel-catalog/${section}`)
+        if (r.ok) {
+          const data = await r.json()
+          this.kcatalog = { ...this.kcatalog, [section]: data }
+        }
+      } catch {}
+      this.kcatalogLoading = false
+    },
+
+    toggleKernelConfig(field, config, checked) {
+      if (checked) {
+        if (!this.profile.kernel[field].includes(config))
+          this.profile.kernel[field] = [...this.profile.kernel[field], config]
+      } else {
+        this.profile.kernel[field] = this.profile.kernel[field].filter(c => c !== config)
+      }
+    },
+
+    addManualKernelConfig(field, inputEl) {
+      const val = (inputEl?.value || '').trim()
+      if (!val) return
+      const norm = val.startsWith('CONFIG_') ? val : 'CONFIG_' + val
+      if (!norm.includes('=')) return
+      this.toggleKernelConfig(field, norm, true)
     },
 
     async saveServerSettings() {

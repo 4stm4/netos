@@ -1,0 +1,442 @@
+# Kernel CONFIG_* catalog for netOS configurator
+# type: options | modules | drivers
+# default_targets: list of target names where this is pre-selected
+# arch: all | arm64 | x86 | x86_64
+
+options:
+  - category: "Сеть"
+    items:
+      - key: CONFIG_NETFILTER
+        label: "Netfilter"
+        config: "CONFIG_NETFILTER=y"
+        description: "Фреймворк фильтрации пакетов (основа nftables/iptables)"
+        default_targets: [zero2w, pi5, qemu-virt]
+      - key: CONFIG_NF_CONNTRACK
+        label: "Connection tracking"
+        config: "CONFIG_NF_CONNTRACK=y"
+        description: "Отслеживание соединений (нужен для NAT)"
+        default_targets: [zero2w, pi5]
+      - key: CONFIG_BRIDGE
+        label: "Ethernet Bridge"
+        config: "CONFIG_BRIDGE=y"
+        description: "Программный коммутатор L2"
+        default_targets: []
+      - key: CONFIG_VLAN_8021Q
+        label: "802.1Q VLANs"
+        config: "CONFIG_VLAN_8021Q=y"
+        description: "Поддержка тегированных VLAN"
+        default_targets: []
+      - key: CONFIG_NET_SCHED
+        label: "QoS / Traffic Control"
+        config: "CONFIG_NET_SCHED=y"
+        description: "Traffic shaper, qdisc, tc"
+        default_targets: []
+      - key: CONFIG_WIREGUARD
+        label: "WireGuard (built-in)"
+        config: "CONFIG_WIREGUARD=y"
+        description: "WireGuard VPN встроен в ядро"
+        default_targets: []
+      - key: CONFIG_TUN
+        label: "TUN/TAP"
+        config: "CONFIG_TUN=y"
+        description: "Виртуальные сетевые устройства TUN/TAP"
+        default_targets: [zero2w, pi5]
+      - key: CONFIG_MACVLAN
+        label: "MACvlan"
+        config: "CONFIG_MACVLAN=y"
+        description: "Виртуальные интерфейсы с отдельным MAC"
+        default_targets: []
+      - key: CONFIG_IPVLAN
+        label: "IPvlan"
+        config: "CONFIG_IPVLAN=y"
+        description: "Виртуальные интерфейсы L3 (общий MAC)"
+        default_targets: []
+      - key: CONFIG_VXLAN
+        label: "VXLAN"
+        config: "CONFIG_VXLAN=y"
+        description: "Overlay-сети VXLAN (туннели L2 over UDP)"
+        default_targets: []
+      - key: CONFIG_GENEVE
+        label: "Geneve"
+        config: "CONFIG_GENEVE=y"
+        description: "Generic Network Virtualization Encapsulation"
+        default_targets: []
+      - key: CONFIG_BONDING
+        label: "Bonding"
+        config: "CONFIG_BONDING=y"
+        description: "Агрегация сетевых интерфейсов"
+        default_targets: []
+      - key: CONFIG_DUMMY
+        label: "Dummy interface"
+        config: "CONFIG_DUMMY=y"
+        description: "Виртуальный dummy-интерфейс"
+        default_targets: []
+
+  - category: "Контейнеры & Изоляция"
+    items:
+      - key: CONFIG_NAMESPACES
+        label: "Namespaces"
+        config: "CONFIG_NAMESPACES=y"
+        description: "Изоляция процессов (PID, NET, UTS, IPC, USER)"
+        default_targets: []
+      - key: CONFIG_USER_NS
+        label: "User Namespaces"
+        config: "CONFIG_USER_NS=y"
+        description: "Пространства имён пользователей (нужен для rootless)"
+        default_targets: []
+      - key: CONFIG_CGROUPS
+        label: "cgroups"
+        config: "CONFIG_CGROUPS=y"
+        description: "Control Groups — управление ресурсами"
+        default_targets: []
+      - key: CONFIG_MEMCG
+        label: "Memory cgroup"
+        config: "CONFIG_MEMCG=y"
+        description: "Ограничение памяти для cgroup"
+        default_targets: []
+      - key: CONFIG_OVERLAY_FS
+        label: "OverlayFS"
+        config: "CONFIG_OVERLAY_FS=y"
+        description: "Слоёная файловая система (нужна Docker/podman)"
+        default_targets: []
+      - key: CONFIG_BPF_SYSCALL
+        label: "BPF syscall"
+        config: "CONFIG_BPF_SYSCALL=y"
+        description: "eBPF — сетевая трассировка и фильтрация"
+        default_targets: []
+
+  - category: "Файловые системы"
+    items:
+      - key: CONFIG_SQUASHFS
+        label: "SquashFS"
+        config: "CONFIG_SQUASHFS=y"
+        description: "Сжатая read-only ФС"
+        default_targets: []
+      - key: CONFIG_BTRFS_FS
+        label: "Btrfs"
+        config: "CONFIG_BTRFS_FS=y"
+        description: "Btrfs с copy-on-write и снапшотами"
+        default_targets: []
+      - key: CONFIG_TMPFS
+        label: "tmpfs"
+        config: "CONFIG_TMPFS=y"
+        description: "Виртуальная ФС в RAM (обычно уже включена)"
+        default_targets: []
+      - key: CONFIG_AUTOFS4_FS
+        label: "AutoFS"
+        config: "CONFIG_AUTOFS4_FS=y"
+        description: "Автоматическое монтирование"
+        default_targets: []
+
+  - category: "Безопасность"
+    items:
+      - key: CONFIG_SECCOMP
+        label: "seccomp"
+        config: "CONFIG_SECCOMP=y"
+        description: "Фильтрация системных вызовов"
+        default_targets: []
+      - key: CONFIG_SECURITY_APPARMOR
+        label: "AppArmor"
+        config: "CONFIG_SECURITY_APPARMOR=y"
+        description: "MAC-профили AppArmor"
+        default_targets: []
+      - key: CONFIG_SECURITY_SELINUX
+        label: "SELinux"
+        config: "CONFIG_SECURITY_SELINUX=y"
+        description: "Mandatory Access Control SELinux"
+        default_targets: []
+      - key: CONFIG_IMA
+        label: "IMA (integrity)"
+        config: "CONFIG_IMA=y"
+        description: "Измерение целостности файлов"
+        default_targets: []
+
+modules:
+  - category: "Сетевая фильтрация"
+    items:
+      - key: CONFIG_NF_TABLES
+        label: "nf_tables"
+        config: "CONFIG_NF_TABLES=m"
+        description: "nftables — современная замена iptables"
+        default_targets: [zero2w, pi5]
+      - key: CONFIG_NFT_NAT
+        label: "nft NAT"
+        config: "CONFIG_NFT_NAT=m"
+        description: "NAT через nftables"
+        default_targets: [zero2w, pi5]
+      - key: CONFIG_IP_SET
+        label: "ipset"
+        config: "CONFIG_IP_SET=m"
+        description: "IP/порт наборы для быстрой фильтрации"
+        default_targets: []
+      - key: CONFIG_IPVS
+        label: "IPVS (балансировщик)"
+        config: "CONFIG_IP_VS=m"
+        description: "IP Virtual Server — балансировка L4"
+        default_targets: []
+      - key: CONFIG_NF_CONNTRACK_MODULE
+        label: "nf_conntrack (модуль)"
+        config: "CONFIG_NF_CONNTRACK=m"
+        description: "Connection tracking как модуль"
+        default_targets: []
+
+  - category: "VPN & Туннели"
+    items:
+      - key: CONFIG_WIREGUARD_MODULE
+        label: "WireGuard (модуль)"
+        config: "CONFIG_WIREGUARD=m"
+        description: "WireGuard как загружаемый модуль"
+        default_targets: []
+      - key: CONFIG_L2TP
+        label: "L2TP"
+        config: "CONFIG_L2TP=m"
+        description: "Layer 2 Tunneling Protocol"
+        default_targets: []
+      - key: CONFIG_PPP
+        label: "PPP"
+        config: "CONFIG_PPP=m"
+        description: "Point-to-Point Protocol (модемы, GSM)"
+        default_targets: [zero2w]
+      - key: CONFIG_PPTP
+        label: "PPTP"
+        config: "CONFIG_PPTP=m"
+        description: "PPTP VPN клиент"
+        default_targets: []
+      - key: CONFIG_GRE
+        label: "GRE туннели"
+        config: "CONFIG_NET_IPGRE=m"
+        description: "Generic Routing Encapsulation"
+        default_targets: []
+
+  - category: "USB"
+    items:
+      - key: CONFIG_USB_SERIAL
+        label: "USB Serial"
+        config: "CONFIG_USB_SERIAL=m"
+        description: "USB-Serial адаптеры"
+        default_targets: []
+      - key: CONFIG_USB_ACM
+        label: "USB CDC ACM"
+        config: "CONFIG_USB_ACM=m"
+        description: "USB модемы/CDC устройства"
+        default_targets: [zero2w]
+
+  - category: "Файловые системы"
+    items:
+      - key: CONFIG_FUSE_FS
+        label: "FUSE"
+        config: "CONFIG_FUSE_FS=m"
+        description: "Filesystem in Userspace"
+        default_targets: []
+      - key: CONFIG_CIFS
+        label: "CIFS/SMB"
+        config: "CONFIG_CIFS=m"
+        description: "Монтирование Windows/Samba шар"
+        default_targets: []
+      - key: CONFIG_NFS_FS
+        label: "NFS клиент"
+        config: "CONFIG_NFS_FS=m"
+        description: "Network File System (клиент)"
+        default_targets: []
+
+drivers:
+  - category: "Виртуальные / QEMU"
+    arch: [x86, x86_64, arm64]
+    items:
+      - key: CONFIG_VIRTIO_NET
+        label: "virtio-net"
+        config: "CONFIG_VIRTIO_NET=y"
+        description: "Паравиртуальный сетевой адаптер QEMU/KVM"
+        default_targets: [qemu-virt, qemu-wifi]
+      - key: CONFIG_VIRTIO_BLK
+        label: "virtio-blk"
+        config: "CONFIG_VIRTIO_BLK=y"
+        description: "Паравиртуальный блочный диск QEMU/KVM"
+        default_targets: [qemu-virt, qemu-wifi]
+      - key: CONFIG_VIRTIO_BALLOON
+        label: "virtio-balloon"
+        config: "CONFIG_VIRTIO_BALLOON=y"
+        description: "Динамическое управление памятью QEMU"
+        default_targets: []
+      - key: CONFIG_VIRTIO_CONSOLE
+        label: "virtio-console"
+        config: "CONFIG_VIRTIO_CONSOLE=y"
+        description: "Виртуальная консоль QEMU"
+        default_targets: [qemu-virt]
+
+  - category: "Сетевые адаптеры"
+    items:
+      - key: CONFIG_E1000
+        label: "Intel e1000"
+        config: "CONFIG_E1000=y"
+        description: "Intel Gigabit Ethernet e1000"
+        default_targets: []
+      - key: CONFIG_E1000E
+        label: "Intel e1000e"
+        config: "CONFIG_E1000E=y"
+        description: "Intel PCIe Gigabit e1000e"
+        default_targets: []
+      - key: CONFIG_R8169
+        label: "Realtek RTL8169"
+        config: "CONFIG_R8169=y"
+        description: "Realtek RTL8111/8168/8169"
+        default_targets: []
+      - key: CONFIG_USB_NET_DRIVERS
+        label: "USB Ethernet"
+        config: "CONFIG_USB_NET_DRIVERS=y"
+        description: "USB сетевые адаптеры (CDC, RNDIS...)"
+        default_targets: [zero2w]
+      - key: CONFIG_SMC91X
+        label: "SMC91x"
+        config: "CONFIG_SMC91X=y"
+        description: "SMC LAN91x (часто используется в QEMU ARM)"
+        default_targets: []
+
+  - category: "Wi-Fi"
+    items:
+      - key: CONFIG_BRCMFMAC
+        label: "brcmfmac (BCM43xxx)"
+        config: "CONFIG_BRCMFMAC=m"
+        description: "Broadcom WiFi (RPi Zero 2W, RPi 3/4/5)"
+        default_targets: [zero2w]
+      - key: CONFIG_ATH9K
+        label: "ath9k"
+        config: "CONFIG_ATH9K=m"
+        description: "Atheros AR9xxx PCIe/Cardbus"
+        default_targets: []
+      - key: CONFIG_ATH9K_USB
+        label: "ath9k_htc (USB)"
+        config: "CONFIG_ATH9K_HTC=m"
+        description: "Atheros AR9271/AR7010 USB WiFi"
+        default_targets: []
+      - key: CONFIG_RTL8XXXU
+        label: "RTL8xxxU (USB)"
+        config: "CONFIG_RTL8XXXU=m"
+        description: "Realtek USB WiFi адаптеры"
+        default_targets: []
+      - key: CONFIG_MT7601U
+        label: "mt7601u (USB)"
+        config: "CONFIG_MT7601U=m"
+        description: "MediaTek MT7601U USB WiFi"
+        default_targets: []
+      - key: CONFIG_IWLWIFI
+        label: "iwlwifi (Intel)"
+        config: "CONFIG_IWLWIFI=m"
+        description: "Intel Wireless (iwlwifi)"
+        default_targets: []
+      - key: CONFIG_MAC80211_HWSIM
+        label: "mac80211_hwsim"
+        config: "CONFIG_MAC80211_HWSIM=m"
+        description: "Симулятор WiFi (тестирование)"
+        default_targets: []
+
+  - category: "Bluetooth"
+    items:
+      - key: CONFIG_BT_HCIUART
+        label: "HCI UART"
+        config: "CONFIG_BT_HCIUART=m"
+        description: "Bluetooth через UART (RPi Zero 2W)"
+        default_targets: [zero2w]
+      - key: CONFIG_BT_BCM
+        label: "btbcm (Broadcom)"
+        config: "CONFIG_BT_BCM=m"
+        description: "Broadcom Bluetooth (RPi)"
+        default_targets: [zero2w]
+      - key: CONFIG_BT_HCIBTUSB
+        label: "BT USB"
+        config: "CONFIG_BT_HCIBTUSB=m"
+        description: "Bluetooth USB адаптеры"
+        default_targets: []
+
+  - category: "USB Host"
+    items:
+      - key: CONFIG_USB_DWC2
+        label: "DWC2 OTG/Host"
+        config: "CONFIG_USB_DWC2=y"
+        description: "USB OTG контроллер (RPi Zero)"
+        default_targets: [zero2w]
+      - key: CONFIG_USB_XHCI_HCD
+        label: "xHCI (USB 3.0)"
+        config: "CONFIG_USB_XHCI_HCD=y"
+        description: "USB 3.0 хост-контроллер"
+        default_targets: []
+      - key: CONFIG_USB_EHCI_HCD
+        label: "eHCI (USB 2.0)"
+        config: "CONFIG_USB_EHCI_HCD=y"
+        description: "USB 2.0 хост-контроллер"
+        default_targets: []
+      - key: CONFIG_USB_SERIAL_PL2303
+        label: "PL2303 (USB Serial)"
+        config: "CONFIG_USB_SERIAL_PL2303=m"
+        description: "Prolific PL2303 USB-Serial"
+        default_targets: []
+      - key: CONFIG_USB_SERIAL_CH341
+        label: "CH341 (USB Serial)"
+        config: "CONFIG_USB_SERIAL_CH341=m"
+        description: "WCH CH341/CH340 USB-Serial"
+        default_targets: []
+
+  - category: "GPIO / I2C / SPI (RPi)"
+    arch: [arm64]
+    items:
+      - key: CONFIG_I2C_BCM2835
+        label: "I2C BCM2835"
+        config: "CONFIG_I2C_BCM2835=y"
+        description: "I2C контроллер Raspberry Pi"
+        default_targets: [zero2w, pi5]
+      - key: CONFIG_SPI_BCM2835
+        label: "SPI BCM2835"
+        config: "CONFIG_SPI_BCM2835=y"
+        description: "SPI контроллер Raspberry Pi"
+        default_targets: [zero2w, pi5]
+      - key: CONFIG_GPIOLIB
+        label: "GPIO lib"
+        config: "CONFIG_GPIOLIB=y"
+        description: "GPIO framework (управление пинами)"
+        default_targets: [zero2w, pi5]
+      - key: CONFIG_GPIO_SYSFS
+        label: "GPIO sysfs"
+        config: "CONFIG_GPIO_SYSFS=y"
+        description: "GPIO через /sys/class/gpio"
+        default_targets: []
+
+  - category: "Дисплей"
+    items:
+      - key: CONFIG_DRM_VC4
+        label: "vc4 (RPi GPU)"
+        config: "CONFIG_DRM_VC4=m"
+        description: "VideoCore IV DRM драйвер (RPi HDMI)"
+        default_targets: [zero2w]
+      - key: CONFIG_FB_SIMPLE
+        label: "Simple FB"
+        config: "CONFIG_FB_SIMPLE=y"
+        description: "Простой framebuffer (universal)"
+        default_targets: [zero2w, pi5]
+      - key: CONFIG_DRM_VIRTIO_GPU
+        label: "virtio-gpu"
+        config: "CONFIG_DRM_VIRTIO_GPU=y"
+        description: "Виртуальный GPU QEMU"
+        default_targets: [qemu-virt]
+
+  - category: "Хранилище"
+    items:
+      - key: CONFIG_MMC_BCM2835
+        label: "MMC BCM2835"
+        config: "CONFIG_MMC_BCM2835=y"
+        description: "SD/MMC контроллер Raspberry Pi"
+        default_targets: [zero2w, pi5]
+      - key: CONFIG_SDHCI
+        label: "SDHCI"
+        config: "CONFIG_SDHCI=y"
+        description: "Standard SDHCI SD card host"
+        default_targets: []
+      - key: CONFIG_BLK_DEV_NVME
+        label: "NVMe"
+        config: "CONFIG_BLK_DEV_NVME=y"
+        description: "NVMe PCIe SSD"
+        default_targets: [pi5]
+      - key: CONFIG_ATA
+        label: "SATA/ATA"
+        config: "CONFIG_ATA=y"
+        description: "SATA/PATA (libata)"
+        default_targets: []

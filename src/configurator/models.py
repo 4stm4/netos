@@ -125,6 +125,12 @@ class KernelConfig(BaseModel):
     rpi_branch: str = ""
     # For mainline/QEMU targets (kernel_source="mainline"): version, e.g. "6.12.27"
     mainline_version: str = ""
+    # CONFIG_*=y lines (subsystems/features)
+    options: list[str] = []
+    # CONFIG_*=m lines (loadable modules)
+    modules: list[str] = []
+    # CONFIG_*=y/m lines (hardware drivers)
+    drivers: list[str] = []
 
 
 class Profile(BaseModel):
