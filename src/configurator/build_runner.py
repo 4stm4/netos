@@ -100,16 +100,21 @@ def _load_builds_from_disk() -> None:
             bid = meta["build_id"]
             if bid in _builds:
                 continue
-            crashed = meta.get("status") == "running"
+            # A build is "crashed" only if it was running AND has no log file
+            # (log file means it was writing to disk — might still be running).
+            disk_status = meta.get("status", "error")
+            log_file = BUILDS_DIR / f"{bid}.log"
+            if disk_status == "running" and not log_file.exists():
+                disk_status = "error"   # lost — no log, no process
             state = BuildState(
                 build_id=bid,
                 target=meta.get("target", ""),
-                status="error" if crashed else meta.get("status", "error"),
+                status=disk_status,
                 stage=meta.get("stage", ""),
                 started_at=meta.get("started_at", ""),
                 finished_at=meta.get("finished_at", ""),
             )
-            if crashed:
+            if disk_status == "error" and not meta.get("finished_at"):
                 state.finished_at = state.started_at
                 _write_meta(state)
             log_file = BUILDS_DIR / f"{bid}.log"
@@ -165,10 +170,19 @@ def _reader_thread(
 ) -> None:
     """Reads subprocess stdout in a thread and puts events onto the async queue."""
     assert proc.stdout is not None
+    _log_file = BUILDS_DIR / f"{state.build_id}.log"
+    _flush_every = 50          # append to disk every N lines
+    _unflushed = 0
     try:
         for raw in proc.stdout:
             line = raw.rstrip("\n")
             state.log_lines.append(line)
+            # Incremental write: append line to log file so it survives uvicorn restart
+            try:
+                with _log_file.open("a") as _lf:
+                    _lf.write(line + "\n")
+            except Exception:
+                pass
 
             event_type = "log"
             if line.startswith(_MAKE_PROGRESS_PREFIX):
