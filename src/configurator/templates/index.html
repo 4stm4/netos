@@ -1992,19 +1992,18 @@ function app() {
       if (el) el.scrollTop = el.scrollHeight
     },
 
+    // scroll with retries — Alpine x-for renders large logs across multiple frames
+    _scrollLogRetry(n = 10, delay = 60) {
+      this._scrollLog()
+      if (n > 0) setTimeout(() => this._scrollLogRetry(n - 1, delay), delay)
+    },
+
     async viewBuild(b) {
       const full = await fetch(`/api/builds/${b.build_id}`).then(r => r.json())
       this.buildLog = full.log_lines.map(l => ({ event: 'log', data: l }))
       this.buildStage = full.stage
       this.viewingBuildId = b.build_id
-      // $nextTick fires before Alpine renders all x-for items for large logs
-      // use two ticks + a small timeout to ensure DOM is fully updated
-      this.$nextTick(() => {
-        this.$nextTick(() => {
-          this._scrollLog()
-          setTimeout(() => this._scrollLog(), 120)
-        })
-      })
+      this.$nextTick(() => this._scrollLogRetry())
       if (full.status === 'running' && !this.building) {
         this.building = true
         const es = new EventSource(`/api/builds/${b.build_id}/events`)
