@@ -443,20 +443,25 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
 .custom-line .mono { font-size: 10px; color: var(--fg-2); flex: 1; word-break: break-all; }
 
 /* Build */
-.build-layout { display: flex; flex-direction: column; gap: 16px; height: 100%; }
+/* step-body override for Build step — stop outer scroll, let log scroll */
+.step-body.build-layout {
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.build-layout { display: flex; flex-direction: column; gap: 16px; }
 .build-controls { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
 .build-controls .field { min-width: 200px; }
 .build-stage {
   font-size: 12px; color: var(--info);
   padding: 4px 0; align-self: center;
 }
-.build-log-wrap { flex: 1; min-height: 200px; }
+.build-log-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .build-log {
   background: #010409;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px;
-  height: 100%; min-height: 300px;
+  flex: 1; min-height: 0;
   overflow-y: auto;
   font-family: 'SF Mono', ui-monospace, monospace;
   font-size: 12px;
