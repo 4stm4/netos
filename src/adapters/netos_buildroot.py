@@ -719,9 +719,13 @@ fi
                 'BR2_SYSTEM_DHCP="eth0"',
                 'BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_NETOS_PATH)/board/4stm4/netos/rootfs_overlay"',
                 'BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_NETOS_PATH)/board/4stm4/netos/post-build.sh"',
-                # Увеличиваем read-timeout: по умолчанию wget не имеет таймаута на чтение
-                # и может висеть часами на медленном/обрывистом соединении.
-                'BR2_WGET="wget -nd --passive-ftp -t 3 --connect-timeout=20 --read-timeout=300"',
+                # Primary mirror: use sources.buildroot.net first for all packages.
+                # This skips slow/unreliable upstream VCS clones (e.g. sourceware.org/glibc.git)
+                # and goes straight to pre-packaged tarballs.
+                'BR2_PRIMARY_SITE="https://sources.buildroot.net"',
+                # Aggressive retry: -t 0 = unlimited retries, --waitretry=10 waits between attempts,
+                # --read-timeout=600 handles slow connections, partial downloads are resumed automatically.
+                'BR2_WGET="wget -nd --passive-ftp -t 0 --waitretry=10 --connect-timeout=30 --read-timeout=600"',
                 *package_lines,
                 "",
             ]
