@@ -295,6 +295,10 @@ TARGETS = {
             "dtdebug=1",
             "dtoverlay=vc4-kms-v3d",
             "max_framebuffers=2",
+            # Move BT chip (BCM43436) to mini-UART (ttyS0), freeing PL011 (ttyAMA0)
+            # for the serial console. Without this btattach on ttyAMA0 competes
+            # with the console and corrupts serial output.
+            "dtoverlay=miniuart-bt",
         ),
         boot_cmdline=(
             "console=serial0,115200 console=tty1 "

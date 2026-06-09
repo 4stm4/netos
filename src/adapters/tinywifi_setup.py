@@ -260,8 +260,13 @@ start)
             --exec /usr/sbin/nanodhcp -- "$NANODHCP_CONF"
     fi
 
-    # uhttpd — веб-страница на AP-адресе
-    if command -v uhttpd >/dev/null 2>&1 && [ -d "$WWW_ROOT" ]; then
+    # Веб-панель: tinywifi-web если собран (занимает порт 80 сам),
+    # иначе uhttpd со статическим /www/index.html.
+    if [ -x /usr/sbin/tinywifi-web ]; then
+        start-stop-daemon --start --quiet --background \\
+            --pidfile /run/tinywifi-web.pid --make-pidfile \\
+            --exec /usr/sbin/tinywifi-web -- --config /etc/tinywifi/tinywifi.toml
+    elif command -v uhttpd >/dev/null 2>&1 && [ -d "$WWW_ROOT" ]; then
         uhttpd -p {AP_IP}:80 -h "$WWW_ROOT" &
         echo $! > /run/uhttpd.pid
     fi
@@ -408,10 +413,15 @@ esac
         return self._cache_base() / "tinywifi-web-bin"
 
     def _web_panel(self, root: Path) -> None:
-        """Собирает tinywifi-web на build-сервере и устанавливает в rootfs."""
+        """Собирает tinywifi-web на build-сервере и устанавливает в rootfs.
+
+        Если cargo недоступен или сборка упала — пишем статический index.html
+        чтобы uhttpd не отдавал 404 на веб-панель роутера.
+        """
         binary = self._build_web_binary()
         if binary is None:
-            logging.warning("tinywifi-web не собран — веб-панель недоступна")
+            logging.warning("tinywifi-web не собран — используем статическую веб-панель")
+            self._www_index(root)
             return
         # Устанавливаем бинарник
         dest = root / "usr" / "sbin" / "tinywifi-web"
