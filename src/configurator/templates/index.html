@@ -2004,7 +2004,10 @@ function app() {
 
     async viewBuild(b) {
       const full = await fetch(`/api/builds/${b.build_id}`).then(r => r.json())
+      // API returns last 500 lines — fast response regardless of build size
       this.buildLog = full.log_lines.map(l => ({ event: 'log', data: l }))
+      // restore total count so "X строк" badge stays accurate
+      if (full.log_lines_count) b.log_lines = full.log_lines_count
       this.buildStage = full.stage
       this.viewingBuildId = b.build_id
       this.$nextTick(() => this._scrollLogRetry())

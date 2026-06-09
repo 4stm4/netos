@@ -25,17 +25,22 @@ def get_builds() -> list[dict[str, Any]]:
     return list_builds()
 
 
+_LOG_TAIL = 500   # lines returned by default; use ?tail=N to override
+
+
 @router.get("/builds/{build_id}")
-def get_build_info(build_id: str) -> dict[str, Any]:
+def get_build_info(build_id: str, tail: int = _LOG_TAIL) -> dict[str, Any]:
     state = get_build(build_id)
     if state is None:
         raise HTTPException(status_code=404, detail="Build not found")
+    lines = state.log_lines
     return {
         "build_id": state.build_id,
         "target": state.target,
         "status": state.status,
         "stage": state.stage,
-        "log_lines": state.log_lines,
+        "log_lines": lines[-tail:] if tail > 0 else lines,
+        "log_lines_count": len(lines),
         "started_at": state.started_at,
         "finished_at": state.finished_at,
     }
