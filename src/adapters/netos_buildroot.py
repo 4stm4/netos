@@ -725,7 +725,7 @@ fi
                 'BR2_PRIMARY_SITE="https://sources.buildroot.net"',
                 # Aggressive retry: -t 0 = unlimited retries, --waitretry=10 waits between attempts,
                 # --read-timeout=600 handles slow connections, partial downloads are resumed automatically.
-                'BR2_WGET="wget -nd --passive-ftp -t 0 --waitretry=10 --connect-timeout=30 --read-timeout=600"',
+                'BR2_WGET="wget -nd --passive-ftp -t 0 --waitretry=5 --connect-timeout=30 --read-timeout=120"',
                 *package_lines,
                 "",
             ]
