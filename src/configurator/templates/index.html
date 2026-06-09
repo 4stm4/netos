@@ -982,7 +982,10 @@
 
       <div class="build-log-wrap">
         <div class="build-log" id="build-log">
-          <template x-for="(ev, i) in buildLog" :key="i">
+          <div x-show="buildLog.length > buildLogMaxLines" class="log-truncated-notice">
+            ⋯ показаны последние <span x-text="buildLogMaxLines"></span> строк из <span x-text="buildLog.length"></span>
+          </div>
+          <template x-for="(ev, i) in buildLogVisible" :key="i">
             <div class="log-line" :class="ev.level || ev.event" x-text="ev.data || ev.text || ev.message"></div>
           </template>
           <span class="log-cursor" x-show="building">▌</span>
@@ -1376,6 +1379,8 @@ function app() {
     pkgSearchLoading: false,
     pkgSearchTimer: null,
     buildLog: [],
+    buildLogMaxLines: 500,
+    get buildLogVisible() { return this.buildLog.slice(-this.buildLogMaxLines) },
     building: false,
     buildStage: '',
     builds: [],

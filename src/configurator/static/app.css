@@ -475,6 +475,7 @@ input[type=checkbox] { width: auto; accent-color: var(--info); }
 .log-line.warning { color: var(--warn); }
 .log-line.stage { color: var(--info); font-weight: 600; }
 .log-cursor { display: inline-block; color: var(--info); animation: blink 1s step-end infinite; }
+.log-truncated-notice { color: var(--fg-3); font-size: 11px; padding: 2px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
 /* Modal */
