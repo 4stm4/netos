@@ -1,26 +1,26 @@
 # netOS
 
-Сборочная из исходников ARM64/x86_64 appliance OS для сетевого и виртуализационного узла.
+A from-source ARM64/x86_64 appliance OS for network and virtualization nodes.
 
-Внутри: Linux kernel, минимальный userspace (Buildroot), Open vSwitch / OVSDB, управляющие агенты, Web UI (Testum) и SDN-контроллер (Nervum). Собирается в готовый raw disk image.
+Built from scratch: Linux kernel, minimal userspace (Buildroot), Open vSwitch / OVSDB, management agents, Web UI (Testum) and SDN controller (Nervum). Produces a ready-to-flash raw disk image.
 
-**Это не Ubuntu/Debian rootfs.** В target-системе нет `apt`, `dpkg`, `docker`. Buildroot управляет всем userspace.
+**This is not an Ubuntu/Debian rootfs.** The target system has no `apt`, `dpkg`, or `docker`. Buildroot manages the entire userspace.
 
-## Быстрый старт
+## Quick Start
 
 ```bash
-# Собрать образ для QEMU (ARM64)
+# Build an image for QEMU (ARM64)
 python3 src/main.py --target qemu-virt
 
-# Запустить и проверить
+# Run and verify
 python3 src/run_qemu.py --target qemu-virt
 ```
 
-Сборка занимает 30–90 минут при первом запуске; последующие инкрементальны.
+First build takes 30–90 minutes; subsequent builds are incremental.
 
 ## Targets
 
-| Target | Архитектура | Ядро | Образ | Размер |
+| Target | Architecture | Kernel | Image | Size |
 |---|---|---|---|---|
 | `qemu-virt` | ARM64 | mainline 6.12 | `qemu-virt.img` | 512 MB |
 | `qemu-x86` | x86\_64 | mainline 6.12 | `qemu-x86.img` | 512 MB |
@@ -28,33 +28,35 @@ python3 src/run_qemu.py --target qemu-virt
 | `pi4` | ARM64 | rpi-6.12.y | `raspi-pi4.img` | 1024 MB |
 | `zero2w` | ARM64 | rpi-6.12.y | `raspi-zero2w.img` | 1024 MB |
 
-## Web-конфигуратор
+## Web Configurator
 
-Браузерный интерфейс для настройки и запуска сборок:
+A browser-based interface for configuring and launching builds:
 
 ```bash
 python3 src/configurator/serve.py --host 0.0.0.0 --port 5173
 ```
 
-Открыть: `http://localhost:5173`
+Open: `http://localhost:5173`
 
-## Документация
+Features: target selection, kernel version picker (RPi branches and mainline up to 7.x), kernel config browser, package manager, build cache manager, build history with live log streaming.
 
-- [Сборка](docs/build.md) — требования, команды, профили, переменные окружения
-- [Targets](docs/targets.md) — описание каждого target, ядра, архитектуры
-- [QEMU](docs/qemu.md) — запуск в QEMU, port forwarding, x86 vs ARM
-- [Конфигуратор](docs/configurator.md) — web-интерфейс, шаги мастера, профили
-- [Пакеты](docs/packages.md) — добавление пакетов, presets, кастомные BR2_PACKAGE
-- [Сеть](docs/networking.md) — eth0, Wi-Fi, Open vSwitch / OVSDB
-- [Переменные окружения](docs/env-reference.md) — полный справочник NETOS_*
+## Documentation
 
-## Требования к среде сборки
+- [Build](docs/build.md) — requirements, commands, profiles, environment variables
+- [Targets](docs/targets.md) — per-target description, kernel, architecture
+- [QEMU](docs/qemu.md) — running in QEMU, port forwarding, x86 vs ARM
+- [Configurator](docs/configurator.md) — web UI, wizard steps, profiles
+- [Packages](docs/packages.md) — adding packages, presets, custom BR2_PACKAGE
+- [Networking](docs/networking.md) — eth0, Wi-Fi, Open vSwitch / OVSDB
+- [Environment Variables](docs/env-reference.md) — full NETOS_* reference
 
-- Linux (macOS — только через Lima VM или remote builder)
+## Build Host Requirements
+
+- Linux (macOS — only via Lima VM or remote builder)
 - Python 3.10+
-- Не запускать под root — `sudo` вызывается автоматически только для `mount`/`losetup`
-- ~10 GB свободного места на диске
+- Do not run as root — `sudo` is called automatically only for `mount`/`losetup`
+- ~10 GB free disk space
 
-## Лицензия
+## License
 
-Смотри [LICENSE](LICENSE).
+See [LICENSE](LICENSE) (GPL v3).
