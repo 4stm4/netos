@@ -28,7 +28,7 @@ NANODHCP_VERSION = os.environ.get(
 )
 NANODHCP_SHA256 = os.environ.get(
     "NETOS_NANODHCP_SHA256",
-    "8b7f44ad9667d35b22fe64264737d347a310ac0e3f96c7da482289a398c2c221",
+    "8570b6b3ed92a2d722c75fe6964eeefb42c5374ce8396ddb07b1fb1143ce9670",
 )
 
 _OPENVSWITCH_KNOWN_SHA256: dict[str, tuple[str, str]] = {
@@ -182,6 +182,7 @@ class NetOSBuildrootBuilder:
         (nanodhcp_dir / "Config.in").write_text(self._nanodhcp_config_in())
         (nanodhcp_dir / "nanodhcp.mk").write_text(self._nanodhcp_mk())
         (nanodhcp_dir / "nanodhcp.hash").write_text(self._nanodhcp_hash())
+        (nanodhcp_dir / "0001-fix-Cargo.lock-version.patch").write_text(self._nanodhcp_cargo_lock_patch())
         (nanodhcp_dir / "S10nanodhcp").write_text(self._nanodhcp_init_script())
         (nanodhcp_dir / "S10nanodhcp").chmod(0o755)
         (nanodhcp_dir / "nanodhcp.conf").write_text(self._nanodhcp_default_config())
@@ -552,6 +553,23 @@ $(eval $(cargo-package))
         return f"""\
 # Locally calculated — nanodhcp commit {NANODHCP_VERSION[:12]}
 sha256  {NANODHCP_SHA256}  nanodhcp-{NANODHCP_VERSION}.tar.gz
+"""
+
+    def _nanodhcp_cargo_lock_patch(self) -> str:
+        return """\
+From: fix <fix@fix.com>
+Date: Sat, 14 Jun 2026 00:00:00 +0000
+Subject: [PATCH] fix Cargo.lock version to match Cargo.toml 0.2.0
+
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -3,5 +3,5 @@
+ version = 4
+
+ [[package]]
+ name = "nanodhcp"
+-version = "0.1.0"
++version = "0.2.0"
 """
 
     def _nanodhcp_init_script(self) -> str:
