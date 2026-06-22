@@ -162,6 +162,7 @@ fi
 # Ровно один из двух файлов будет найден в зависимости от платформы:
 #   zero2w:    brcmfmac.ko  (реальный BCM43436, firmware из /lib/firmware/brcm/)
 #   qemu-wifi: mac80211_hwsim.ko (виртуальный WiFi, без firmware)
+depmod -a 2>/dev/null || true
 rfkill unblock wifi 2>/dev/null || true
 
 load_wifi_mod() {{
