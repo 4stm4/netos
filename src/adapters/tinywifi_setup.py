@@ -176,6 +176,7 @@ load_wifi_mod() {{
 }}
 
 load_wifi_mod brcmfmac || load_wifi_mod mac80211_hwsim || true
+modprobe amneziawg 2>/dev/null || true
 # Сетевые фильтры, USB, PPP — через modprobe; ошибки некритичны
 for m in nf_tables nft_masq nf_nat nf_conntrack \
           usb_serial cp210x ch341 cdc_acm ppp_async ppp_deflate; do
