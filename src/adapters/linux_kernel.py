@@ -19,6 +19,25 @@ AMNEZIAWG_SHA256 = os.environ.get(
     "e062ecc9f1d89eeafa9f56a29473372a1d796ee061eaa8c7b61eeb51c38b80d6",
 )
 
+AMNEZIAWG_TOOLS_VERSION = os.environ.get("NETOS_AMNEZIAWG_TOOLS_VERSION", "v1.0.20260618")
+AMNEZIAWG_TOOLS_SHA256 = os.environ.get(
+    "NETOS_AMNEZIAWG_TOOLS_SHA256",
+    "f1993084634bb9e957d0b14756e019a4af2f4e9c08d73362cce3ab14cb92ea7b",
+)
+
+AMNEZIAWG_GO_VERSION = os.environ.get("NETOS_AMNEZIAWG_GO_VERSION", "v0.2.19")
+AMNEZIAWG_GO_SHA256 = os.environ.get(
+    "NETOS_AMNEZIAWG_GO_SHA256",
+    "d2fde8df81199e2350b43f387fe79b3056a2278457504fa1f91cd170cb0f474b",
+)
+
+# Go toolchain for building amneziawg-go (linux/arm64 native on RPi5 build server)
+GO_VERSION = os.environ.get("NETOS_GO_VERSION", "1.23.4")
+GO_SHA256_ARM64 = os.environ.get(
+    "NETOS_GO_SHA256_ARM64",
+    "16e5017863a7f6071363782b1b8042eb12c6ca4f4cd71528b2123f0a1275b13e",
+)
+
 
 def _env(name: str, default: Optional[str] = None, legacy_name: Optional[str] = None) -> Optional[str]:
     if name in os.environ:
@@ -404,6 +423,8 @@ class LinuxKernel:
 
         if self.build_amneziawg and self.build_modules and self._kernel_modules_enabled():
             self._build_amneziawg_module()
+            self._build_amneziawg_tools()
+            self._build_amneziawg_go()
 
         boot_dir = self.rootfs_path / "boot"
         boot_dir.mkdir(parents=True, exist_ok=True)
@@ -493,6 +514,108 @@ class LinuxKernel:
         ko_dst_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ko_src, ko_dst_dir / "amneziawg.ko")
         logging.info("Установлен amneziawg.ko → %s", ko_dst_dir)
+
+    def _build_amneziawg_tools(self):
+        """Cross-compile amneziawg-tools (awg binary) for the target arch."""
+        url = (
+            "https://github.com/amnezia-vpn/amneziawg-tools"
+            f"/archive/refs/tags/{AMNEZIAWG_TOOLS_VERSION}.tar.gz"
+        )
+        filename = f"amneziawg-tools-{AMNEZIAWG_TOOLS_VERSION}.tar.gz"
+        mgr = ArtifactManager(self.temp_path)
+        tarball = mgr.fetch(url=url, sha256=AMNEZIAWG_TOOLS_SHA256, filename=filename, timeout=120)
+
+        extract_dir = self.temp_path / "amneziawg-tools-build"
+        if extract_dir.exists():
+            shutil.rmtree(extract_dir)
+        extract_dir.mkdir(parents=True)
+        with tarfile.open(tarball) as tf:
+            tf.extractall(extract_dir)
+
+        subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
+        if not subdirs:
+            raise RuntimeError("amneziawg-tools tarball extracted no directories")
+        src_dir = subdirs[0] / "src"
+
+        jobs = os.environ.get("NETOS_BUILD_JOBS", str(os.cpu_count() or 1))
+        logging.info("Собираем amneziawg-tools (awg)...")
+        subprocess.run(
+            [
+                "make", f"-j{jobs}",
+                f"CC={self.cross_compile}gcc",
+                f"AR={self.cross_compile}ar",
+                "PREFIX=/usr",
+                f"DESTDIR={self.rootfs_path}",
+                "WITH_WGQUICK=no",
+                "WITH_BASHCOMPLETION=no",
+                "WITH_SYSTEMDUNITS=no",
+                "install",
+            ],
+            check=True,
+            cwd=src_dir,
+        )
+        logging.info("Установлен awg → %s/usr/bin/awg", self.rootfs_path)
+
+    def _build_amneziawg_go(self):
+        """Build amneziawg-go userspace daemon (fallback when kernel module fails)."""
+        go_dir = self.temp_path / "go-toolchain"
+        go_bin = go_dir / "go" / "bin" / "go"
+
+        if not go_bin.exists():
+            logging.info("Скачиваем Go %s (linux/arm64)...", GO_VERSION)
+            url = f"https://go.dev/dl/go{GO_VERSION}.linux-arm64.tar.gz"
+            filename = f"go{GO_VERSION}.linux-arm64.tar.gz"
+            mgr = ArtifactManager(self.temp_path)
+            tarball = mgr.fetch(url=url, sha256=GO_SHA256_ARM64, filename=filename, timeout=300)
+            go_dir.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(tarball) as tf:
+                tf.extractall(go_dir)
+            logging.info("Go установлен: %s", go_bin)
+
+        url = (
+            "https://github.com/amnezia-vpn/amneziawg-go"
+            f"/archive/refs/tags/{AMNEZIAWG_GO_VERSION}.tar.gz"
+        )
+        filename = f"amneziawg-go-{AMNEZIAWG_GO_VERSION}.tar.gz"
+        mgr = ArtifactManager(self.temp_path)
+        tarball = mgr.fetch(url=url, sha256=AMNEZIAWG_GO_SHA256, filename=filename, timeout=120)
+
+        extract_dir = self.temp_path / "amneziawg-go-build"
+        if extract_dir.exists():
+            shutil.rmtree(extract_dir)
+        extract_dir.mkdir(parents=True)
+        with tarfile.open(tarball) as tf:
+            tf.extractall(extract_dir)
+
+        subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
+        if not subdirs:
+            raise RuntimeError("amneziawg-go tarball extracted no directories")
+        src_dir = subdirs[0]
+
+        logging.info("Собираем amneziawg-go...")
+        env = os.environ.copy()
+        env["GOROOT"] = str(go_dir / "go")
+        env["PATH"] = str(go_dir / "go" / "bin") + ":" + env.get("PATH", "")
+        env["GOOS"] = "linux"
+        env["GOARCH"] = "arm64"
+        env["CGO_ENABLED"] = "0"
+        env["GOFLAGS"] = ""
+        # Write a static version.go since there's no git tag in the extracted tarball
+        (src_dir / "version.go").write_text(
+            f'package main\n\nconst Version = "{AMNEZIAWG_GO_VERSION}"\n'
+        )
+        subprocess.run(
+            [str(go_bin), "build", "-o", "amneziawg-go", "."],
+            check=True,
+            cwd=src_dir,
+            env=env,
+        )
+
+        dest = self.rootfs_path / "usr" / "bin" / "amneziawg-go"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_dir / "amneziawg-go", dest)
+        dest.chmod(0o755)
+        logging.info("Установлен amneziawg-go → %s", dest)
 
     def _install_boot_firmware(self, boot_dir: Path):
         if not self.boot_firmware_files:
