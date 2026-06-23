@@ -213,6 +213,13 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_ETHERNET=n",
     # Disable in-tree WireGuard so amneziawg (out-of-tree fork) can load without conflict
     "CONFIG_WIREGUARD=n",
+    # USB networking — RNDIS/CDC modems (Huawei HiLink, Quectel EC21, etc.)
+    # These present as usb0/eth1 without PPP, WAN page picks them up automatically.
+    "CONFIG_USB_USBNET=y",
+    "CONFIG_USB_NET_RNDIS_HOST=y",
+    "CONFIG_USB_NET_CDC_ETHER=y",
+    "CONFIG_USB_NET_HUAWEI_CDC_NCM=y",
+    "CONFIG_USB_NET_QMI_WWAN=m",
 )
 
 
