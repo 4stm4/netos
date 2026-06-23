@@ -31,12 +31,6 @@ NANODHCP_SHA256 = os.environ.get(
     "8570b6b3ed92a2d722c75fe6964eeefb42c5374ce8396ddb07b1fb1143ce9670",
 )
 
-AMNEZIAWG_VERSION = os.environ.get("NETOS_AMNEZIAWG_VERSION", "v1.0.20260611")
-AMNEZIAWG_SHA256 = os.environ.get(
-    "NETOS_AMNEZIAWG_SHA256",
-    "e062ecc9f1d89eeafa9f56a29473372a1d796ee061eaa8c7b61eeb51c38b80d6",
-)
-
 _OPENVSWITCH_KNOWN_SHA256: dict[str, tuple[str, str]] = {
     "3.4.1": (
         "6e97ec7dfdda5b40b5103946d53e4f8b11edf66049fedbdcb323e1af67133de8",
@@ -149,12 +143,11 @@ class NetOSBuildrootBuilder:
         ovs_dir        = self.external_dir / "package" / "openvswitch"
         mininet_dir    = self.external_dir / "package" / "mininet"
         nanodhcp_dir   = self.external_dir / "package" / "nanodhcp"
-        amneziawg_dir  = self.external_dir / "package" / "amneziawg"
         board_dir      = self.external_dir / "board" / "4stm4" / "netos"
         overlay_dir    = board_dir / "rootfs_overlay"
         configs_dir    = self.external_dir / "configs"
 
-        for d in (ovs_dir, mininet_dir, nanodhcp_dir, amneziawg_dir, overlay_dir, configs_dir):
+        for d in (ovs_dir, mininet_dir, nanodhcp_dir, overlay_dir, configs_dir):
             d.mkdir(parents=True)
 
         (self.external_dir / "external.desc").write_text(
@@ -165,7 +158,6 @@ class NetOSBuildrootBuilder:
             'source "$BR2_EXTERNAL_NETOS_PATH/package/openvswitch/Config.in"\n'
             'source "$BR2_EXTERNAL_NETOS_PATH/package/mininet/Config.in"\n'
             'source "$BR2_EXTERNAL_NETOS_PATH/package/nanodhcp/Config.in"\n'
-            'source "$BR2_EXTERNAL_NETOS_PATH/package/amneziawg/Config.in"\n'
         )
         (self.external_dir / "external.mk").write_text(
             "include $(sort $(wildcard $(BR2_EXTERNAL_NETOS_PATH)/package/*/*.mk))\n"
@@ -194,11 +186,6 @@ class NetOSBuildrootBuilder:
         (nanodhcp_dir / "S10nanodhcp").write_text(self._nanodhcp_init_script())
         (nanodhcp_dir / "S10nanodhcp").chmod(0o755)
         (nanodhcp_dir / "nanodhcp.conf").write_text(self._nanodhcp_default_config())
-
-        # amneziawg — out-of-tree kernel module (AmneziaVPN WireGuard fork)
-        (amneziawg_dir / "Config.in").write_text(self._amneziawg_config_in())
-        (amneziawg_dir / "amneziawg.mk").write_text(self._amneziawg_mk())
-        (amneziawg_dir / "amneziawg.hash").write_text(self._amneziawg_hash())
 
         self._write_overlay(overlay_dir)
         post_build = board_dir / "post-build.sh"
@@ -583,43 +570,6 @@ Subject: [PATCH] fix Cargo.lock version to match Cargo.toml 0.2.0
  name = "nanodhcp"
 -version = "0.1.0"
 +version = "0.2.0"
-"""
-
-    def _amneziawg_config_in(self) -> str:
-        return """\
-config BR2_PACKAGE_AMNEZIAWG
-\tbool "amneziawg"
-\tdepends on BR2_LINUX_KERNEL
-\thelp
-\t  AmneziaWG out-of-tree kernel module — WireGuard fork with
-\t  traffic obfuscation (Jc/Jmin/Jmax/S1/S2/H1-H4 fields).
-\t  https://github.com/amnezia-vpn/amneziawg-linux-kernel-module
-"""
-
-    def _amneziawg_mk(self) -> str:
-        return f"""\
-################################################################################
-#
-# amneziawg — AmneziaVPN WireGuard fork (out-of-tree kernel module)
-#
-################################################################################
-
-AMNEZIAWG_VERSION = {AMNEZIAWG_VERSION}
-AMNEZIAWG_SITE    = https://github.com/amnezia-vpn/amneziawg-linux-kernel-module/archive/refs/tags/$(AMNEZIAWG_VERSION)
-AMNEZIAWG_SOURCE  = amneziawg-$(AMNEZIAWG_VERSION).tar.gz
-AMNEZIAWG_LICENSE = GPL-2.0
-AMNEZIAWG_LICENSE_FILES = COPYING
-
-AMNEZIAWG_MODULE_SUBDIRS = src
-
-$(eval $(kernel-module))
-$(eval $(generic-package))
-"""
-
-    def _amneziawg_hash(self) -> str:
-        return f"""\
-# Locally calculated — amneziawg {AMNEZIAWG_VERSION}
-sha256  {AMNEZIAWG_SHA256}  amneziawg-{AMNEZIAWG_VERSION}.tar.gz
 """
 
     def _nanodhcp_init_script(self) -> str:

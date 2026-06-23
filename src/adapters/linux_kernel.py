@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import subprocess
+import tarfile
 from pathlib import Path
 from typing import Iterable, Optional, Union
 
@@ -11,6 +12,12 @@ from netos_build.artifacts import ArtifactManager
 RPI_REPO_URL = "https://github.com/raspberrypi/linux.git"
 DEFAULT_RPI_BRANCH = "rpi-6.12.y"
 MAINLINE_KERNEL_BASE_URL = "https://cdn.kernel.org/pub/linux/kernel"
+
+AMNEZIAWG_VERSION = os.environ.get("NETOS_AMNEZIAWG_VERSION", "v1.0.20260611")
+AMNEZIAWG_SHA256 = os.environ.get(
+    "NETOS_AMNEZIAWG_SHA256",
+    "e062ecc9f1d89eeafa9f56a29473372a1d796ee061eaa8c7b61eeb51c38b80d6",
+)
 
 
 def _env(name: str, default: Optional[str] = None, legacy_name: Optional[str] = None) -> Optional[str]:
@@ -60,6 +67,7 @@ class LinuxKernel:
         kernel_source: str = "rpi",
         kernel_arch: str = "arm64",
         cross_compile: str = "aarch64-linux-gnu-",
+        build_amneziawg: bool = False,
     ):
         self.temp_path = Path(temp_path)
         self.rpi_model = rpi_model
@@ -76,6 +84,7 @@ class LinuxKernel:
         self.config_options = tuple(config_options)
         self.boot_firmware_files = tuple(boot_firmware_files)
         self.build_modules = build_modules
+        self.build_amneziawg = build_amneziawg
         prebuilt_kernel = _env("NETOS_PREBUILT_KERNEL_IMAGE", legacy_name="LITAINER_PREBUILT_KERNEL_IMAGE")
         self.prebuilt_kernel_image = Path(prebuilt_kernel) if prebuilt_kernel else None
 
@@ -393,6 +402,9 @@ class LinuxKernel:
             else:
                 logging.info("CONFIG_MODULES отключен, modules_install пропускаем.")
 
+        if self.build_amneziawg and self.build_modules and self._kernel_modules_enabled():
+            self._build_amneziawg_module()
+
         boot_dir = self.rootfs_path / "boot"
         boot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -430,6 +442,57 @@ class LinuxKernel:
             logging.error(f"Директория overlays не найдена: {overlays_src_dir}")
 
         self._install_boot_firmware(boot_dir)
+
+    def _build_amneziawg_module(self):
+        """Build amneziawg out-of-tree kernel module against the just-built RPi kernel."""
+        url = (
+            "https://github.com/amnezia-vpn/amneziawg-linux-kernel-module"
+            f"/archive/refs/tags/{AMNEZIAWG_VERSION}.tar.gz"
+        )
+        filename = f"amneziawg-{AMNEZIAWG_VERSION}.tar.gz"
+        mgr = ArtifactManager(self.temp_path)
+        tarball = mgr.fetch(url=url, sha256=AMNEZIAWG_SHA256, filename=filename, timeout=120)
+
+        extract_dir = self.temp_path / "amneziawg-build"
+        if extract_dir.exists():
+            shutil.rmtree(extract_dir)
+        extract_dir.mkdir(parents=True)
+        with tarfile.open(tarball) as tf:
+            tf.extractall(extract_dir)
+
+        subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
+        if not subdirs:
+            raise RuntimeError("amneziawg tarball extracted no directories")
+        src_dir = subdirs[0]
+
+        jobs = os.environ.get("NETOS_BUILD_JOBS", str(os.cpu_count() or 1))
+        logging.info("Собираем amneziawg kernel module (KDIR=%s)...", self.rpi_repo_path)
+        subprocess.run(
+            [
+                "make", f"-j{jobs}",
+                "-C", "src",
+                f"KDIR={self.rpi_repo_path}",
+                f"ARCH={self.kernel_arch}",
+                f"CROSS_COMPILE={self.cross_compile}",
+            ],
+            check=True,
+            cwd=src_dir,
+        )
+
+        result = subprocess.run(
+            ["make", "-s", f"ARCH={self.kernel_arch}", f"CROSS_COMPILE={self.cross_compile}", "kernelrelease"],
+            check=True,
+            cwd=self.rpi_repo_path,
+            capture_output=True,
+            text=True,
+        )
+        kver = result.stdout.strip()
+
+        ko_src = src_dir / "src" / "amneziawg.ko"
+        ko_dst_dir = self.rootfs_path / "lib" / "modules" / kver / "extra"
+        ko_dst_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ko_src, ko_dst_dir / "amneziawg.ko")
+        logging.info("Установлен amneziawg.ko → %s", ko_dst_dir)
 
     def _install_boot_firmware(self, boot_dir: Path):
         if not self.boot_firmware_files:

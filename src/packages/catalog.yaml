@@ -173,8 +173,6 @@ groups:
       #   HOG = HID-over-GATT for BLE keyboards (kernel CONFIG_UHID)
       - BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_HID=y
       - BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_HOG=y
-      # AmneziaWG — WireGuard fork with traffic obfuscation
-      - BR2_PACKAGE_AMNEZIAWG=y
 
   mininet:
     description: "Mininet network manager — interface config, DHCP server (opt-in, QEMU x86)"

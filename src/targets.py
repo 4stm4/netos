@@ -211,6 +211,8 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_HAMRADIO=n",
     # Pi Zero 2W has no built-in Ethernet (only WiFi + USB-OTG)
     "CONFIG_ETHERNET=n",
+    # Disable in-tree WireGuard so amneziawg (out-of-tree fork) can load without conflict
+    "CONFIG_WIREGUARD=n",
 )
 
 
@@ -240,6 +242,7 @@ class TargetConfig:
     qemu_root_device: Optional[str] = None
     qemu_requires_dtb: bool = False
     qemu_dtb_name: Optional[str] = None
+    build_amneziawg: bool = False
 
     @property
     def qemu_supported(self) -> bool:
@@ -333,6 +336,7 @@ TARGETS = {
         install_boot_files=True,
         kernel_config_options=ZERO2W_KERNEL_OPTIONS,
         build_kernel_modules=True,
+        build_amneziawg=True,
         image_size_mb=192,
         boot_size_mb=48,
     ),

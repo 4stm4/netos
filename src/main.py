@@ -232,6 +232,7 @@ if __name__ == "__main__":
         kernel_source=target.kernel_source,
         kernel_arch=target.kernel_arch,
         cross_compile=target.cross_compile,
+        build_amneziawg=target.build_amneziawg,
     )
 
     logging_adapter.info(
