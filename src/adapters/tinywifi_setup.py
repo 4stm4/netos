@@ -344,7 +344,9 @@ esac
         (root / "etc" / "nftables" / "tinywifi.nft").write_text(
             f"#!/usr/sbin/nft -f\n"
             f"# /etc/nftables/tinywifi.nft — TinyWifi NAT\n"
-            f"# Masquerade трафика клиентов AP ({AP_IFACE}) через WAN ({WAN_IFACE}).\n\n"
+            f"# Masquerade трафика клиентов AP ({AP_IFACE}) — любой выходной интерфейс\n"
+            f"# (eth0 без VPN, awg* с VPN). Правило по подсети, а не по iface,\n"
+            f"# чтобы работало при любом имени VPN-туннеля.\n\n"
             f"flush ruleset\n\n"
             f"table inet filter {{\n"
             f"    chain input   {{ type filter hook input   priority 0; policy accept; }}\n"
@@ -354,7 +356,7 @@ esac
             f"table ip nat {{\n"
             f"    chain postrouting {{\n"
             f"        type nat hook postrouting priority 100; policy accept;\n"
-            f"        oifname \"{WAN_IFACE}\" masquerade\n"
+            f"        ip saddr {AP_SUBNET} masquerade\n"
             f"    }}\n"
             f"}}\n"
         )
