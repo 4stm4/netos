@@ -70,8 +70,10 @@ class TinyWifiSetup:
             "etc/tinywifi",
             "etc/bluetooth",
             "etc/profile.d",
+            "etc/amnezia/amneziawg",
             "www",
             "var/lib/nanodhcp",
+            "var/lib/amneziawg",
             "var/lib/tinywifi",
             "var/log",
             "run",
@@ -99,6 +101,12 @@ class TinyWifiSetup:
             "devtmpfs /dev     devtmpfs defaults  0 0\n"
             "tmpfs    /run     tmpfs    defaults  0 0\n"
             "tmpfs    /tmp     tmpfs    defaults  0 0\n"
+            # AmneziaWG config persisted on ext4 rootfs via bind-mount
+            "/var/lib/amneziawg  /etc/amnezia/amneziawg  none  bind  0 0\n"
+        )
+        # Пустой шаблон — web UI запишет реальный конфиг при настройке VPN
+        (root / "etc" / "amnezia" / "amneziawg" / "awg0.conf").write_text(
+            "# AmneziaWG config — edit via web UI or awg setconf awg0\n"
         )
         (root / "etc" / "motd").write_text(
             f"4stm4 TinyWifi {self.version}\n"
@@ -176,6 +184,7 @@ load_wifi_mod() {{
 }}
 
 load_wifi_mod brcmfmac || load_wifi_mod mac80211_hwsim || true
+modprobe r8152 2>/dev/null || true
 modprobe amneziawg 2>/dev/null || true
 # Сетевые фильтры, USB, PPP — через modprobe; ошибки некритичны
 for m in nf_tables nft_masq nf_nat nf_conntrack \
@@ -189,7 +198,7 @@ done
 ip link set lo up 2>/dev/null || true
 ip link set {WAN_IFACE} up 2>/dev/null || true
 if command -v udhcpc >/dev/null 2>&1; then
-    udhcpc -i {WAN_IFACE} -b -q 2>/dev/null || true
+    udhcpc -i {WAN_IFACE} -t 10 -n -q 2>/dev/null || true
 fi
 """)
 
