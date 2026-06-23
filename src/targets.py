@@ -339,6 +339,7 @@ TARGETS = {
             "BR2_PACKAGE_WIRELESS_TOOLS=y",
             "BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y",
             "BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y",
+            "BR2_PACKAGE_OPENNTPD=y",
         ),
         install_boot_files=True,
         kernel_config_options=ZERO2W_KERNEL_OPTIONS,

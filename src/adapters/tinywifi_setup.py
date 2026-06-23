@@ -52,6 +52,7 @@ class TinyWifiSetup:
         self._nftables_conf(root)
         self._nanodhcp_conf(root)
         self._tinywifi_conf(root)
+        self._openntpd_conf(root)
         self._web_panel(root)   # tinywifi-web заменяет _www_index
         self._amneziawg_tools(root)
         self._amneziawg_go(root)
@@ -394,12 +395,27 @@ esac
             "[paths]\n"
             "hostapd_conf  = \"/etc/hostapd/hostapd.conf\"\n"
             "nanodhcp_conf = \"/etc/nanodhcp/nanodhcp.conf\"\n"
-            "leases_file   = \"/var/lib/nanodhcp/leases.json\"\n\n"
+            "leases_file   = \"/var/lib/nanodhcp/leases\"\n\n"
             "[services]\n"
             "hostapd  = \"hostapd\"\n"
             "nanodhcp = \"nanodhcp\"\n"
             "web      = \"tinywifi-web\"\n"
             "display  = \"tinywifi-display\"\n"
+        )
+
+    # ------------------------------------------------------------------
+    # NTP — openntpd
+    # ------------------------------------------------------------------
+
+    def _openntpd_conf(self, root: Path) -> None:
+        """Конфиг openntpd: использует публичный пул + Cloudflare/Google как fallback."""
+        ntpd_dir = root / "etc" / "openntpd"
+        ntpd_dir.mkdir(parents=True, exist_ok=True)
+        (ntpd_dir / "ntpd.conf").write_text(
+            "# /etc/openntpd/ntpd.conf — синхронизация времени для TinyWifi\n"
+            "servers pool.ntp.org\n"
+            "server time.cloudflare.com\n"
+            "server time.google.com\n"
         )
 
     # ------------------------------------------------------------------
