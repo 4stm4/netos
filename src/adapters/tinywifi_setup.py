@@ -53,6 +53,8 @@ class TinyWifiSetup:
         self._nanodhcp_conf(root)
         self._tinywifi_conf(root)
         self._web_panel(root)   # tinywifi-web заменяет _www_index
+        self._amneziawg_tools(root)
+        self._amneziawg_go(root)
         self._bluetooth_conf(root)
         self._disable_conflicting_inits(root)
         self._set_root_password(root)
@@ -562,6 +564,87 @@ esac
                 logging.debug("cargo найден: %s (%s)", candidate,
                               result.stdout.decode().strip())
                 return candidate
+            except Exception:
+                continue
+        return None
+
+    # ------------------------------------------------------------------
+    # AmneziaWG tools — awg binary + amneziawg-go userspace daemon
+    # ------------------------------------------------------------------
+
+    _AWG_TOOLS_REPO = "https://github.com/amnezia-vpn/amneziawg-tools.git"
+    _AWG_GO_REPO    = "https://github.com/amnezia-vpn/amneziawg-go.git"
+
+    def _amneziawg_tools(self, root: Path) -> None:
+        """Собирает awg (amneziawg-tools) и устанавливает в /usr/bin/awg."""
+        cache = self._cache_base() / "amneziawg-tools"
+        src   = cache / "src"
+        bin_f = cache / "awg"
+
+        if not bin_f.exists():
+            try:
+                if not (src / ".git").exists():
+                    logging.info("Клонирую amneziawg-tools…")
+                    src.parent.mkdir(parents=True, exist_ok=True)
+                    subprocess.run(
+                        ["git", "clone", "--depth=1", self._AWG_TOOLS_REPO, str(src)],
+                        check=True, timeout=120,
+                    )
+                subprocess.run(["make", "-C", str(src / "src")], check=True, timeout=120)
+                shutil.copy2(src / "src" / "wg", bin_f)
+            except Exception as exc:
+                logging.warning("awg build failed: %s", exc)
+                return
+
+        dest = root / "usr" / "bin" / "awg"
+        shutil.copy2(bin_f, dest)
+        dest.chmod(0o755)
+        logging.info("awg установлен: %s", dest)
+
+    def _amneziawg_go(self, root: Path) -> None:
+        """Собирает amneziawg-go и устанавливает в /usr/bin/amneziawg-go."""
+        cache = self._cache_base() / "amneziawg-go"
+        src   = cache / "src"
+        bin_f = cache / "amneziawg-go"
+
+        if not bin_f.exists():
+            go = self._find_go()
+            if go is None:
+                logging.warning("go не найден — пропускаю сборку amneziawg-go")
+                return
+            try:
+                if not (src / ".git").exists():
+                    logging.info("Клонирую amneziawg-go…")
+                    src.parent.mkdir(parents=True, exist_ok=True)
+                    subprocess.run(
+                        ["git", "clone", "--depth=1", self._AWG_GO_REPO, str(src)],
+                        check=True, timeout=120,
+                    )
+                subprocess.run(
+                    [go, "build", "-o", str(bin_f), "."],
+                    cwd=str(src), check=True, timeout=300,
+                )
+            except Exception as exc:
+                logging.warning("amneziawg-go build failed: %s", exc)
+                return
+
+        dest = root / "usr" / "bin" / "amneziawg-go"
+        shutil.copy2(bin_f, dest)
+        dest.chmod(0o755)
+        logging.info("amneziawg-go установлен: %s", dest)
+
+    @staticmethod
+    def _find_go() -> str | None:
+        candidates = [
+            "go",
+            "/usr/local/go/bin/go",
+            "/usr/lib/go/bin/go",
+            os.path.expanduser("~/go/bin/go"),
+        ]
+        for c in candidates:
+            try:
+                subprocess.run([c, "version"], capture_output=True, check=True, timeout=5)
+                return c
             except Exception:
                 continue
         return None
