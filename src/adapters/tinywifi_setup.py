@@ -335,6 +335,7 @@ esac
             f"wpa_passphrase={self.ap_psk}\n"
             f"wpa_key_mgmt=WPA-PSK\n"
             f"rsn_pairwise=CCMP\n"
+            f"macaddr_acl=0\n"
         )
 
     # ------------------------------------------------------------------
