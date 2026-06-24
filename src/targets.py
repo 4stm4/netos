@@ -187,6 +187,8 @@ ZERO2W_KERNEL_OPTIONS = COMMON_KERNEL_OPTIONS + (
     "CONFIG_STAGING=n",
     # Hardware monitoring — no sensors on this board
     "CONFIG_HWMON=n",
+    # Ralink RT2800 USB WiFi dongles (RT5370, RT5372, RT3070 etc.)
+    "CONFIG_RT2800USB=m",
     # Non-brcmfmac wireless drivers — Pi Zero 2W only has BCM43436
     "CONFIG_ATH_COMMON=n",
     "CONFIG_ATH9K=n",
@@ -342,6 +344,8 @@ TARGETS = {
             "BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y",
             "BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y",
             "BR2_PACKAGE_OPENNTPD=y",
+            "BR2_PACKAGE_LINUX_FIRMWARE=y",
+            "BR2_PACKAGE_LINUX_FIRMWARE_RT2800USB=y",
         ),
         install_boot_files=True,
         kernel_config_options=ZERO2W_KERNEL_OPTIONS,
