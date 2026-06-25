@@ -31,6 +31,12 @@ NANODHCP_SHA256 = os.environ.get(
     "8570b6b3ed92a2d722c75fe6964eeefb42c5374ce8396ddb07b1fb1143ce9670",
 )
 
+# nanodns и tinywifi пинятся веткой (по умолчанию main) — сборщик берёт свежий
+# код с GitHub при каждой сборке. SHA256 для ветки не фиксируем: тарбол ветки
+# меняется, поэтому проверка хэша только мешала бы (цена — невоспроизводимость).
+NANODNS_VERSION = os.environ.get("NETOS_NANODNS_VERSION", "main")
+TINYWIFI_VERSION = os.environ.get("NETOS_TINYWIFI_VERSION", "main")
+
 _OPENVSWITCH_KNOWN_SHA256: dict[str, tuple[str, str]] = {
     "3.4.1": (
         "6e97ec7dfdda5b40b5103946d53e4f8b11edf66049fedbdcb323e1af67133de8",
@@ -143,11 +149,13 @@ class NetOSBuildrootBuilder:
         ovs_dir        = self.external_dir / "package" / "openvswitch"
         mininet_dir    = self.external_dir / "package" / "mininet"
         nanodhcp_dir   = self.external_dir / "package" / "nanodhcp"
+        nanodns_dir    = self.external_dir / "package" / "nanodns"
+        tinywifi_dir   = self.external_dir / "package" / "tinywifi"
         board_dir      = self.external_dir / "board" / "4stm4" / "netos"
         overlay_dir    = board_dir / "rootfs_overlay"
         configs_dir    = self.external_dir / "configs"
 
-        for d in (ovs_dir, mininet_dir, nanodhcp_dir, overlay_dir, configs_dir):
+        for d in (ovs_dir, mininet_dir, nanodhcp_dir, nanodns_dir, tinywifi_dir, overlay_dir, configs_dir):
             d.mkdir(parents=True)
 
         (self.external_dir / "external.desc").write_text(
@@ -158,6 +166,8 @@ class NetOSBuildrootBuilder:
             'source "$BR2_EXTERNAL_NETOS_PATH/package/openvswitch/Config.in"\n'
             'source "$BR2_EXTERNAL_NETOS_PATH/package/mininet/Config.in"\n'
             'source "$BR2_EXTERNAL_NETOS_PATH/package/nanodhcp/Config.in"\n'
+            'source "$BR2_EXTERNAL_NETOS_PATH/package/nanodns/Config.in"\n'
+            'source "$BR2_EXTERNAL_NETOS_PATH/package/tinywifi/Config.in"\n'
         )
         (self.external_dir / "external.mk").write_text(
             "include $(sort $(wildcard $(BR2_EXTERNAL_NETOS_PATH)/package/*/*.mk))\n"
@@ -186,6 +196,18 @@ class NetOSBuildrootBuilder:
         (nanodhcp_dir / "S10nanodhcp").write_text(self._nanodhcp_init_script())
         (nanodhcp_dir / "S10nanodhcp").chmod(0o755)
         (nanodhcp_dir / "nanodhcp.conf").write_text(self._nanodhcp_default_config())
+
+        # nanodns package — Rust/Cargo, downloaded from GitHub (branch-tracked)
+        (nanodns_dir / "Config.in").write_text(self._nanodns_config_in())
+        (nanodns_dir / "nanodns.mk").write_text(self._nanodns_mk())
+        (nanodns_dir / "S11nanodns").write_text(self._nanodns_init_script())
+        (nanodns_dir / "S11nanodns").chmod(0o755)
+        (nanodns_dir / "nanodns.conf").write_text(self._nanodns_default_config())
+        (nanodns_dir / "blocklist").write_text(self._nanodns_default_blocklist())
+
+        # tinywifi package — Rust/Cargo web panel, downloaded from GitHub (branch-tracked)
+        (tinywifi_dir / "Config.in").write_text(self._tinywifi_config_in())
+        (tinywifi_dir / "tinywifi.mk").write_text(self._tinywifi_mk())
 
         self._write_overlay(overlay_dir)
         post_build = board_dir / "post-build.sh"
@@ -652,6 +674,209 @@ lease_file=/var/lib/nanodhcp/leases
 # ── Static bindings ───────────────────────────────────────────────────────────
 # static=<name>,<mac>,<ip>
 # static=myserver,aa:bb:cc:dd:ee:ff,10.0.0.5
+"""
+
+    # ------------------------------------------------------------------
+    # nanodns package (Rust, branch-tracked from GitHub)
+    # ------------------------------------------------------------------
+
+    def _nanodns_config_in(self) -> str:
+        return """\
+config BR2_PACKAGE_NANODNS
+\tbool "nanodns"
+\tdepends on BR2_USE_MMU
+\tdepends on BR2_TOOLCHAIN_HAS_THREADS
+\tselect BR2_PACKAGE_HOST_RUSTC
+\thelp
+\t  Minimal DNS server for small local networks. Pure Rust, no external
+\t  crates — single static binary.
+\t
+\t  Serves the local .lan zone, resolves nanodhcp leases, forwards unknown
+\t  domains upstream, optional response cache and a domain blocklist
+\t  (ad/tracking sinkhole) with mtime hot-reload.
+\t
+\t  Installs:
+\t    /usr/sbin/nanodns        — DNS server binary
+\t    /etc/nanodns/config      — default configuration
+\t    /etc/nanodns/blocklist   — domain blocklist (managed by web UI)
+\t    /etc/init.d/S11nanodns   — BusyBox init script
+\t
+\t  https://github.com/4stm4/nanoDNS
+
+comment "nanodns needs a toolchain w/ threads"
+\tdepends on BR2_USE_MMU
+\tdepends on !BR2_TOOLCHAIN_HAS_THREADS
+"""
+
+    def _nanodns_mk(self) -> str:
+        # Branch-tracked (VERSION=main по умолчанию): тарбол ветки меняется,
+        # поэтому .hash не пишем — Buildroot предупредит и продолжит.
+        return f"""\
+################################################################################
+#
+# nanodns — minimal DNS server with domain blocking (Rust)
+#
+################################################################################
+
+NANODNS_VERSION      = {NANODNS_VERSION}
+NANODNS_SITE         = https://github.com/4stm4/nanoDNS/archive/$(NANODNS_VERSION)
+NANODNS_SOURCE       = nanodns-$(NANODNS_VERSION).tar.gz
+NANODNS_LICENSE      = AGPL-3.0
+NANODNS_LICENSE_FILES = LICENSE
+
+define NANODNS_INSTALL_TARGET_CMDS
+\t$(INSTALL) -D -m 0755 \\
+\t\t$(@D)/target/$(RUSTC_TARGET_NAME)/release/nanodns \\
+\t\t$(TARGET_DIR)/usr/sbin/nanodns
+\t$(INSTALL) -D -m 0644 \\
+\t\t$(BR2_EXTERNAL_NETOS_PATH)/package/nanodns/nanodns.conf \\
+\t\t$(TARGET_DIR)/etc/nanodns/config
+\t$(INSTALL) -D -m 0644 \\
+\t\t$(BR2_EXTERNAL_NETOS_PATH)/package/nanodns/blocklist \\
+\t\t$(TARGET_DIR)/etc/nanodns/blocklist
+\t$(INSTALL) -D -m 0755 \\
+\t\t$(BR2_EXTERNAL_NETOS_PATH)/package/nanodns/S11nanodns \\
+\t\t$(TARGET_DIR)/etc/init.d/S11nanodns
+endef
+
+$(eval $(cargo-package))
+"""
+
+    def _nanodns_init_script(self) -> str:
+        return """\
+#!/bin/sh
+#
+# /etc/init.d/S11nanodns — BusyBox init script for nanodns
+# Starts after S10nanodhcp so the lease file already exists.
+#
+
+CONF=/etc/nanodns/config
+PIDFILE=/var/run/nanodns.pid
+
+case "$1" in
+    start)
+        printf 'Starting nanodns: '
+        start-stop-daemon --start --quiet --background \\
+            --pidfile "$PIDFILE" --make-pidfile \\
+            --exec /usr/sbin/nanodns -- --config "$CONF"
+        echo "OK"
+        ;;
+    stop)
+        printf 'Stopping nanodns: '
+        start-stop-daemon --stop --quiet --pidfile "$PIDFILE"
+        rm -f "$PIDFILE"
+        echo "OK"
+        ;;
+    restart|reload)
+        "$0" stop
+        "$0" start
+        ;;
+    status)
+        if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+            echo "nanodns: running (pid=$(cat "$PIDFILE"))"
+        else
+            echo "nanodns: stopped"
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+
+exit $?
+"""
+
+    def _nanodns_default_config(self) -> str:
+        # Установится как /etc/nanodns/config. На TinyWifi AP nanodns слушает 53,
+        # резолвит .lan и читает leases от nanodhcp.
+        return """\
+# /etc/nanodns/config — nanodns configuration
+# https://github.com/4stm4/nanoDNS
+#
+# Format: key=value, one per line. Blank lines and # comments are ignored.
+
+listen=0.0.0.0:53
+domain=lan
+router_name=router
+router_ip=192.168.44.1
+
+# Upstream resolvers (tried in order)
+upstream=1.1.1.1:53
+upstream=8.8.8.8:53
+
+# DHCP leases written by nanodhcp -> hostname.lan resolution
+lease_file=/var/lib/nanodhcp/leases
+
+# Response cache
+cache=true
+cache_max_entries=4096
+cache_ttl=60
+
+# Domain blocking (ad/tracking). Managed by the TinyWifi web panel; the file is
+# hot-reloaded on change. block_response: sinkhole IP (0.0.0.0) or NXDOMAIN.
+block_file=/etc/nanodns/blocklist
+block_response=0.0.0.0
+"""
+
+    def _nanodns_default_blocklist(self) -> str:
+        return """\
+# /etc/nanodns/blocklist — one domain per line, '#' comments, '*.domain' wildcard.
+# Managed by the TinyWifi web panel (downloads StevenBlack/AdGuard lists).
+# Empty by default — add domains or let the web UI populate it.
+"""
+
+    # ------------------------------------------------------------------
+    # tinywifi-web package (Rust, branch-tracked from GitHub)
+    # ------------------------------------------------------------------
+
+    def _tinywifi_config_in(self) -> str:
+        return """\
+config BR2_PACKAGE_TINYWIFI
+\tbool "tinywifi-web"
+\tdepends on BR2_USE_MMU
+\tdepends on BR2_TOOLCHAIN_HAS_THREADS
+\tselect BR2_PACKAGE_HOST_RUSTC
+\thelp
+\t  TinyWifi web management panel (Rust). Builds the tinywifi-web crate
+\t  from the tinyWiFi workspace and installs the binary. The init script
+\t  (S20tinywifi-web) is provisioned by the TinyWifi appliance setup.
+\t
+\t  Installs:
+\t    /usr/sbin/tinywifi-web    — web panel binary
+\t
+\t  https://github.com/4stm4/tinyWiFi
+
+comment "tinywifi-web needs a toolchain w/ threads"
+\tdepends on BR2_USE_MMU
+\tdepends on !BR2_TOOLCHAIN_HAS_THREADS
+"""
+
+    def _tinywifi_mk(self) -> str:
+        # tinyWiFi — это cargo workspace; собираем только крейт tinywifi-web,
+        # чтобы не тянуть tinywifi-display (железо-специфичные зависимости).
+        return f"""\
+################################################################################
+#
+# tinywifi-web — TinyWifi web management panel (Rust)
+#
+################################################################################
+
+TINYWIFI_VERSION      = {TINYWIFI_VERSION}
+TINYWIFI_SITE         = https://github.com/4stm4/tinyWiFi/archive/$(TINYWIFI_VERSION)
+TINYWIFI_SOURCE       = tinywifi-$(TINYWIFI_VERSION).tar.gz
+TINYWIFI_LICENSE      = MIT
+TINYWIFI_LICENSE_FILES = LICENSE
+
+# Собирать только web-крейт из workspace
+TINYWIFI_CARGO_BUILD_OPTS = -p tinywifi-web
+
+define TINYWIFI_INSTALL_TARGET_CMDS
+\t$(INSTALL) -D -m 0755 \\
+\t\t$(@D)/target/$(RUSTC_TARGET_NAME)/release/tinywifi-web \\
+\t\t$(TARGET_DIR)/usr/sbin/tinywifi-web
+endef
+
+$(eval $(cargo-package))
 """
 
     def _write_overlay(self, overlay_dir: Path):
