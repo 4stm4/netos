@@ -346,13 +346,7 @@ TARGETS = {
             "BR2_PACKAGE_OPENNTPD=y",
             "BR2_PACKAGE_LINUX_FIRMWARE=y",
             "BR2_PACKAGE_LINUX_FIRMWARE_RT2800USB=y",
-            # curl + openssl — для загрузки blocklist'ов (StevenBlack/AdGuard)
-            # веб-панелью TinyWifi по HTTPS. libcurl/libcurl_openssl уже даёт
-            # группа tinywifi; здесь включаем CLI-утилиту curl и openssl.
-            # Имя символа CLI в Buildroot — BR2_PACKAGE_LIBCURL_CURL; BR2_PACKAGE_CURL
-            # оставлен на случай иного наименования (olddefconfig отбросит лишнее).
             "BR2_PACKAGE_LIBCURL_CURL=y",
-            "BR2_PACKAGE_CURL=y",
             "BR2_PACKAGE_OPENSSL=y",
         ),
         install_boot_files=True,
