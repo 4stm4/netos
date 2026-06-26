@@ -274,16 +274,8 @@ start)
             --exec /usr/sbin/nanodhcp -- "$NANODHCP_CONF"
     fi
 
-    # Веб-панель: tinywifi-web если собран (занимает порт 80 сам),
-    # иначе uhttpd со статическим /www/index.html.
-    if [ -x /usr/sbin/tinywifi-web ]; then
-        start-stop-daemon --start --quiet --background \\
-            --pidfile /run/tinywifi-web.pid --make-pidfile \\
-            --exec /usr/sbin/tinywifi-web -- --config /etc/tinywifi/tinywifi.toml
-    elif command -v uhttpd >/dev/null 2>&1 && [ -d "$WWW_ROOT" ]; then
-        uhttpd -p {AP_IP}:80 -h "$WWW_ROOT" &
-        echo $! > /run/uhttpd.pid
-    fi
+    # Веб-панель стартует через S20tinywifi-web (отдельный init-скрипт).
+    # S10tinywifi не запускает её сам, чтобы избежать двойного старта на порту 80.
 
     echo 'OK'
     echo "TinyWifi: AP={self.ap_ssid} {AP_IP}/24"
@@ -396,10 +388,12 @@ esac
             "[paths]\n"
             "hostapd_conf  = \"/etc/hostapd/hostapd.conf\"\n"
             "nanodhcp_conf = \"/etc/nanodhcp/nanodhcp.conf\"\n"
-            "leases_file   = \"/var/lib/nanodhcp/leases\"\n\n"
+            "leases_file   = \"/var/lib/nanodhcp/leases\"\n"
+            "nanodns_conf  = \"/etc/nanodns/config\"\n\n"
             "[services]\n"
             "hostapd  = \"hostapd\"\n"
             "nanodhcp = \"nanodhcp\"\n"
+            "nanodns  = \"nanodns\"\n"
             "web      = \"tinywifi-web\"\n"
             "display  = \"tinywifi-display\"\n"
         )
