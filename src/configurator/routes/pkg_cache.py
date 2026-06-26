@@ -242,8 +242,8 @@ async def fetch_package(req: FetchPackageRequest):
         _job_log(job_id, f"Сохраняем в {dest}")
         ok = await _run_cmd(
             job_id,
-            ["wget", "-c", "-O", str(dest), "--tries=5", "--timeout=60",
-             "--progress=dot:mega", req.url],
+            ["curl", "-fL", "--retry", "5", "--connect-timeout", "60",
+             "--progress-bar", "-o", str(dest), req.url],
         )
         if ok:
             _job_log(job_id, f"✓ Готово: {filename}")
@@ -333,8 +333,8 @@ async def fetch_kernel(req: FetchKernelRequest):
             _job_log(job_id, "Это может занять несколько минут (~150MB)...")
             ok = await _run_cmd(
                 job_id,
-                ["wget", "-c", "-O", str(dest), "--tries=3", "--timeout=120",
-                 "--progress=dot:mega", url],
+                ["curl", "-fL", "--retry", "3", "--connect-timeout", "120",
+                 "--progress-bar", "-o", str(dest), url],
             )
             if ok:
                 sz = dest.stat().st_size if dest.exists() else 0
@@ -363,8 +363,8 @@ async def fetch_kernel(req: FetchKernelRequest):
             _job_log(job_id, "Это может занять несколько минут (~130MB)...")
             ok = await _run_cmd(
                 job_id,
-                ["wget", "-c", "-O", str(dest), "--tries=3", "--timeout=120",
-                 "--progress=dot:mega", url],
+                ["curl", "-fL", "--retry", "3", "--connect-timeout", "120",
+                 "--progress-bar", "-o", str(dest), url],
             )
             if ok:
                 sz = dest.stat().st_size if dest.exists() else 0

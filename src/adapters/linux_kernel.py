@@ -235,7 +235,7 @@ class LinuxKernel:
         logging.info(f"Скачиваем архив ядра: {tarball_url}")
         try:
             subprocess.run(
-                ["wget", "-O", str(archive_path), "--tries=3", "--timeout=30", tarball_url],
+                ["curl", "-fL", "--retry", "3", "--connect-timeout", "30", "-o", str(archive_path), tarball_url],
                 check=True,
                 cwd=self.temp_path,
             )
