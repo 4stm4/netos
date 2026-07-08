@@ -29,6 +29,13 @@ _BUILDROOT_ARCH_TO_ARCH: dict[str, str] = {
     "aarch64": "arm64",
     "x86_64":  "x86_64",
     "arm":     "arm",
+    "mipsel":  "mipsel",
+    "mips":    "mips",
+}
+
+_LIBC_SYMBOL: dict[str, str] = {
+    "glibc": "BR2_TOOLCHAIN_BUILDROOT_GLIBC=y",
+    "musl":  "BR2_TOOLCHAIN_BUILDROOT_MUSL=y",
 }
 
 _CACHE_POLICIES = frozenset({"use", "rebuild", "refresh"})
@@ -67,6 +74,9 @@ class ResolvedBuildPlan:
     boot_size_mb:       int
     install_boot_files: bool
     boot_cmdline:       str
+
+    # ── Toolchain C library ───────────────────────────────────────────────
+    libc: str = "glibc"         # "glibc" | "musl" (musl for tiny-flash MIPS)
 
     # ── Build control ─────────────────────────────────────────────────────
     cache_policy: str = "use"   # "use" | "rebuild" | "refresh"
@@ -132,6 +142,7 @@ class ResolvedBuildPlan:
             kernel_filename   = t.kernel_filename,
             cross_compile     = t.cross_compile,
             buildroot_arch    = t.buildroot_arch,
+            libc              = t.libc,
             packages          = tuple(t.buildroot_package_lines),
             image_name        = t.image_name,
             image_format      = "qcow2" if t.qemu_machine is not None else "raw",
@@ -168,12 +179,20 @@ class ResolvedBuildPlan:
             joined += "\n__external__\n" + self.external_hash
         return hashlib.md5(joined.encode()).hexdigest()[:16]
 
+    @property
+    def toolchain_libc_symbol(self) -> str:
+        """Buildroot defconfig symbol selecting the C library for this plan."""
+        try:
+            return _LIBC_SYMBOL[self.libc]
+        except KeyError:
+            raise ValueError(f"Unsupported libc {self.libc!r} for target {self.target!r}")
+
     def toolchain_cache_key(self) -> str:
         """Cache key for the pre-built cross-compiler (used by M3 toolchain cache)."""
         parts = "\n".join([
             self.buildroot_arch,
             self.cross_compile,
-            "BR2_TOOLCHAIN_BUILDROOT_GLIBC=y",
+            self.toolchain_libc_symbol,
             "BR2_TOOLCHAIN_BUILDROOT_CXX=y",
         ])
         short = hashlib.md5(parts.encode()).hexdigest()[:8]

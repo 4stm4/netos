@@ -22,10 +22,13 @@ _HASH_FILE    = ".last_toolchain_hash"
 # Опции toolchain — если они изменились, нужна чистка toolchain
 _TOOLCHAIN_KEYS = {
     "BR2_TOOLCHAIN_BUILDROOT_GLIBC",
+    "BR2_TOOLCHAIN_BUILDROOT_MUSL",
     "BR2_TOOLCHAIN_BUILDROOT_CXX",
     "BR2_aarch64",
     "BR2_x86_64",
     "BR2_arm",
+    "BR2_mipsel",
+    "BR2_mips",
 }
 
 
@@ -38,8 +41,7 @@ def _toolchain_cross_prefix(target: str) -> str:
     t = TARGETS.get(target)
     if t is None:
         return "aarch64-buildroot-linux-gnu"
-    arch = t.buildroot_arch  # aarch64 | x86_64
-    return f"{arch}-buildroot-linux-gnu"
+    return t.toolchain_triple  # libc-aware: *-linux-gnu (glibc) | *-linux-musl (musl)
 
 
 def _dir_size_gb(path: Path) -> float:

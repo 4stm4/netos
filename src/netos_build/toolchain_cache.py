@@ -73,7 +73,7 @@ class ToolchainCache:
             plan.buildroot_arch,
             plan.cross_compile,
             buildroot_version,
-            "BR2_TOOLCHAIN_BUILDROOT_GLIBC=y",
+            plan.toolchain_libc_symbol,
             "BR2_TOOLCHAIN_BUILDROOT_CXX=y",
         ])
         short = hashlib.md5(raw.encode()).hexdigest()[:8]
