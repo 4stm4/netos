@@ -256,6 +256,9 @@ class TargetConfig:
     build_amneziawg: bool = False
     libc: str = "glibc"          # "glibc" | "musl" — musl required for tiny-flash (e.g. 16MB MT7628)
     rootfs_type: str = "ext4"    # "ext4" (SD/partitioned) | "squashfs" (compressed, SPI-NOR/MTD)
+    squashfs_comp: str = "xz"    # squashfs compressor: xz|zstd|gzip|lzo (xz = best ratio, OpenWrt default)
+    squashfs_block_kb: int = 256 # squashfs data block size (KB); OpenWrt ramips uses 256
+    flash_erase_kb: int = 64     # SPI-NOR erase-block size (KB); squashfs is padded up to this
 
     @property
     def qemu_supported(self) -> bool:

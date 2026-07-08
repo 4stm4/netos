@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Union
@@ -108,6 +109,78 @@ def convert_to_qcow2(raw_path: Path, qcow2_path: "Path | None" = None) -> Path:
     return dst
 
 
+def _pad_file_to(path: Path, align: int) -> None:
+    """Zero-pad *path* up to the next multiple of *align* bytes (in place).
+
+    SPI-NOR flash is written in whole erase blocks, so the squashfs must end on
+    an erase-block boundary before the writable overlay region begins.
+    """
+    if align <= 0:
+        return
+    size = path.stat().st_size
+    remainder = size % align
+    if remainder == 0:
+        return
+    pad = align - remainder
+    with path.open("ab") as fh:
+        fh.write(b"\x00" * pad)
+
+
+def create_squashfs_img(
+    target: Union[str, TargetConfig],
+    image_path: "Path | None" = None,
+    source_dir: "Path | None" = None,
+) -> Path:
+    """Build a padded squashfs rootfs blob for SPI-NOR / MTD flash targets.
+
+    Unlike :func:`create_img` (partitioned SD card with FAT boot + ext4 root),
+    flash targets ship a flat, read-only squashfs that the bootloader maps as an
+    MTD partition; the remaining flash becomes a writable overlay. This produces
+    only the rootfs blob — kernel concatenation into the final flashable image
+    depends on the board's flash layout and is handled by the flash-image
+    assembler (per-board).
+
+    Returns the path to the produced squashfs image.
+    """
+    target = _resolve_target(target)
+    if shutil.which("mksquashfs") is None:
+        raise RuntimeError(
+            "mksquashfs not found — install squashfs-tools to build "
+            f"rootfs_type=squashfs target {target.name!r}"
+        )
+    src = Path(source_dir) if source_dir is not None else CONTAINER_PATH
+    if not src.exists():
+        raise FileNotFoundError(f"rootfs source directory not found: {src}")
+    img_path = image_path if image_path is not None else PROJECT_ROOT / target.image_name
+    img_path.parent.mkdir(parents=True, exist_ok=True)
+    if img_path.exists():
+        img_path.unlink()
+
+    print(
+        f"Собираем squashfs rootfs {img_path} из {src} "
+        f"(comp={target.squashfs_comp}, block={target.squashfs_block_kb}K) "
+        f"для target={target.name}..."
+    )
+    run(
+        [
+            "mksquashfs",
+            str(src),
+            str(img_path),
+            "-noappend",
+            "-comp",
+            target.squashfs_comp,
+            "-b",
+            str(target.squashfs_block_kb * 1024),
+            "-processors",
+            str(os.cpu_count() or 1),
+        ]
+    )
+    _pad_file_to(img_path, target.flash_erase_kb * 1024)
+    size_kb = img_path.stat().st_size / 1024
+    print(f"Готово! squashfs rootfs: {img_path}  ({size_kb:.0f} KB)")
+    return img_path
+
+
 def create_img(
     target: Union[str, TargetConfig] = "pi5",
     image_path: "Path | None" = None,
@@ -124,6 +197,11 @@ def create_img(
     The raw ``.img`` is kept so subsequent QEMU runs can choose the format.
     """
     target = _resolve_target(target)
+    # Flash targets (SPI-NOR/MTD) use a flat squashfs rootfs, not a partitioned
+    # SD image. Dispatch to the squashfs builder; the ext4 path below is untouched.
+    if target.rootfs_type == "squashfs":
+        create_squashfs_img(target, image_path=image_path)
+        return
     # Respect NETOS_IMAGE_FORMAT env var; auto-enable for QEMU targets
     _fmt = os.environ.get("NETOS_IMAGE_FORMAT", "").lower()
     if _fmt == "qcow2":
