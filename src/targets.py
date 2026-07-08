@@ -259,6 +259,10 @@ class TargetConfig:
     squashfs_comp: str = "xz"    # squashfs compressor: xz|zstd|gzip|lzo (xz = best ratio, OpenWrt default)
     squashfs_block_kb: int = 256 # squashfs data block size (KB); OpenWrt ramips uses 256
     flash_erase_kb: int = 64     # SPI-NOR erase-block size (KB); squashfs is padded up to this
+    # Extra toolchain/arch defconfig symbols emitted verbatim after BR2_<arch>=y
+    # (e.g. CPU ISA + BR2_SOFT_FLOAT for MIPS boards without an FPU). Empty for
+    # ARM64/x86 targets, so their defconfig + toolchain hash stay byte-identical.
+    arch_defconfig_lines: tuple[str, ...] = ()
 
     @property
     def qemu_supported(self) -> bool:

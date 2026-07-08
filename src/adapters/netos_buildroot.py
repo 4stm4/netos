@@ -955,6 +955,7 @@ fi
         return "\n".join(
             [
                 br2_arch,
+                *self.target.arch_defconfig_lines,
                 self.target.toolchain_libc_symbol,
                 "BR2_TOOLCHAIN_BUILDROOT_CXX=y",
                 f'BR2_TARGET_GENERIC_HOSTNAME="{NETOS_HOSTNAME}"',
@@ -984,6 +985,8 @@ fi
             f"cross_compile={self.target.cross_compile}",
             self.target.toolchain_libc_symbol,
             "BR2_TOOLCHAIN_BUILDROOT_CXX=y",
+            # Empty for ARM64/x86 → hash unchanged; MIPS adds ISA + soft-float here.
+            *self.target.arch_defconfig_lines,
         ]
         return _hashlib.md5("\n".join(parts).encode()).hexdigest()
 
