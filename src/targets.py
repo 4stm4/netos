@@ -254,10 +254,29 @@ class TargetConfig:
     qemu_requires_dtb: bool = False
     qemu_dtb_name: Optional[str] = None
     build_amneziawg: bool = False
+    libc: str = "glibc"          # "glibc" | "musl" — musl required for tiny-flash (e.g. 16MB MT7628)
+    rootfs_type: str = "ext4"    # "ext4" (SD/partitioned) | "squashfs" (compressed, SPI-NOR/MTD)
 
     @property
     def qemu_supported(self) -> bool:
         return self.qemu_machine is not None
+
+    @property
+    def toolchain_libc_symbol(self) -> str:
+        """Buildroot defconfig symbol selecting the C library for this target."""
+        try:
+            return {
+                "glibc": "BR2_TOOLCHAIN_BUILDROOT_GLIBC=y",
+                "musl": "BR2_TOOLCHAIN_BUILDROOT_MUSL=y",
+            }[self.libc]
+        except KeyError:
+            raise ValueError(f"Unsupported libc {self.libc!r} for target {self.name!r}")
+
+    @property
+    def toolchain_triple(self) -> str:
+        """Cross-toolchain tuple Buildroot emits under output/host/ for this libc."""
+        suffix = "musl" if self.libc == "musl" else "gnu"
+        return f"{self.buildroot_arch}-buildroot-linux-{suffix}"
 
 
 TARGETS = {

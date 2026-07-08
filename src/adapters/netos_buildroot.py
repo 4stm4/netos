@@ -955,7 +955,7 @@ fi
         return "\n".join(
             [
                 br2_arch,
-                "BR2_TOOLCHAIN_BUILDROOT_GLIBC=y",
+                self.target.toolchain_libc_symbol,
                 "BR2_TOOLCHAIN_BUILDROOT_CXX=y",
                 f'BR2_TARGET_GENERIC_HOSTNAME="{NETOS_HOSTNAME}"',
                 f'BR2_TARGET_GENERIC_ISSUE="{NETOS_NAME} {NETOS_VERSION}"',
@@ -982,7 +982,7 @@ fi
             f"kernel_source={self.target.kernel_source}",
             f"kernel_arch={self.target.kernel_arch}",
             f"cross_compile={self.target.cross_compile}",
-            "BR2_TOOLCHAIN_BUILDROOT_GLIBC=y",
+            self.target.toolchain_libc_symbol,
             "BR2_TOOLCHAIN_BUILDROOT_CXX=y",
         ]
         return _hashlib.md5("\n".join(parts).encode()).hexdigest()
@@ -1013,7 +1013,7 @@ fi
                 if p.exists():
                     p.unlink()
         # Remove stale cross-compiler binaries so the stale-check in the configurator resets
-        prefix = f"{self.target.buildroot_arch}-buildroot-linux-gnu"
+        prefix = self.target.toolchain_triple
         for suffix in ["-g++", "-c++"]:
             b = self.output_dir / "host" / "bin" / f"{prefix}{suffix}"
             if b.exists():
@@ -1160,7 +1160,7 @@ fi
         reconfigures gcc with BR2_TOOLCHAIN_BUILDROOT_CXX=y) is far better than
         letting `make` fall over 30 min into a rootfs build.
         """
-        triple = f"{self.target.buildroot_arch}-buildroot-linux-gnu"
+        triple = self.target.toolchain_triple
         host_triple = self.output_dir / "host" / triple
         if not host_triple.exists():
             return
@@ -1372,7 +1372,7 @@ fi
             return
 
         # Verify that GCC was actually compiled into host/
-        prefix  = f"{self.target.buildroot_arch}-buildroot-linux-gnu"
+        prefix  = self.target.toolchain_triple
         gcc_bin = self.output_dir / "host" / "bin" / f"{prefix}-gcc"
         if not gcc_bin.exists():
             logging.warning(
