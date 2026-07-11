@@ -109,18 +109,31 @@ MT7628_FLASH_SIZE = 0x1000000            # 16 MB
 MT7628_FIRMWARE_START = 0x050000         # firmware region start (after factory)
 MT7628_FIRMWARE_KERNEL_SIZE = 0x200000   # 2 MB kernel cap — TODO: size to uImage
 
-MT7628_16M_LAYOUT = FlashLayout(
-    flash_size=MT7628_FLASH_SIZE,
-    erase_block=ERASE_BLOCK,
-    partitions=(
+def _mt7628_partitions(kernel_size: int = MT7628_FIRMWARE_KERNEL_SIZE) -> tuple[FlashPartition, ...]:
+    """Standard MT7628 ramips partition set. Only the flash size differs between
+    8M/16M variants — the fixed head (u-boot/env/factory/kernel) is identical and
+    rootfs grows to the end, so a new capacity is one line (see below)."""
+    return (
         FlashPartition("u-boot",     0x000000, 0x030000, source="uboot", read_only=True),
         FlashPartition("u-boot-env", 0x030000, 0x010000, source=None,    read_only=True),
         # ART/EEPROM — per-device, never written by the assembler (STEP 2).
         FlashPartition("factory",    0x040000, 0x010000, preserve=True,  read_only=True),
-        FlashPartition("kernel",     MT7628_FIRMWARE_START, MT7628_FIRMWARE_KERNEL_SIZE,
-                       source="kernel"),
+        FlashPartition("kernel",     MT7628_FIRMWARE_START, kernel_size, source="kernel"),
         # rootfs grows to end of flash (size == 0).
-        FlashPartition("rootfs",     MT7628_FIRMWARE_START + MT7628_FIRMWARE_KERNEL_SIZE, 0,
-                       source="rootfs"),
-    ),
+        FlashPartition("rootfs",     MT7628_FIRMWARE_START + kernel_size, 0, source="rootfs"),
+    )
+
+
+MT7628_16M_LAYOUT = FlashLayout(
+    flash_size=MT7628_FLASH_SIZE,          # 16 MB
+    erase_block=ERASE_BLOCK,
+    partitions=_mt7628_partitions(),
+)
+
+# 8 MB variant — identical head, only the chip capacity changes; rootfs
+# auto-shrinks to ~5.9 MB (grow-to-end). Pure config, no code change.
+MT7628_8M_LAYOUT = FlashLayout(
+    flash_size=0x800000,                   # 8 MB
+    erase_block=ERASE_BLOCK,
+    partitions=_mt7628_partitions(),
 )

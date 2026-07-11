@@ -148,6 +148,28 @@ def test_oversize_artifact_raises():
         assemble_flash_image(MT7628_16M_LAYOUT, {"kernel": big}, out)
 
 
+def test_8m_layout_valid_and_rootfs_budget():
+    from flash_layout import MT7628_8M_LAYOUT
+    MT7628_8M_LAYOUT.validate()
+    assert MT7628_8M_LAYOUT.flash_size == 0x800000
+    rootfs = MT7628_8M_LAYOUT.by_source("rootfs")
+    # fixed head (u-boot 192k + env 64k + factory 64k + kernel 2M) then rootfs to end
+    assert rootfs.offset == 0x250000
+    assert rootfs.resolved_size(0x800000) == 0x800000 - 0x250000  # ~5.94 MB
+    # sanity: rootfs still comfortably larger than a minimal AP squashfs (~4 MB)
+    assert rootfs.resolved_size(0x800000) > 4 * 1024 * 1024
+
+
+def test_8m_assembles_full_image():
+    work = Path(tempfile.mkdtemp())
+    from flash_layout import MT7628_8M_LAYOUT
+    kernel = _tmp(b"K" * 1000, "uImage")
+    rootfs = _tmp(b"R" * 5000, "root.squashfs")
+    out = work / "flash8.bin"
+    assemble_flash_image(MT7628_8M_LAYOUT, {"kernel": kernel, "rootfs": rootfs}, out)
+    assert out.stat().st_size == 0x800000
+
+
 def test_rootfs_grows_to_end():
     rootfs = next(p for p in MT7628_16M_LAYOUT.partitions if p.name == "rootfs")
     assert rootfs.size == 0
