@@ -97,8 +97,9 @@ class FlashLayout:
 # MT7628AN — 16 MB SPI-NOR (ramips convention, STEP 1)
 # ---------------------------------------------------------------------------
 #
-# Edit offsets HERE only. Mirror any change into
-# board/4stm4/mt7628/custom-mt7628-board.dts.
+# Edit offsets HERE only. Mirror any change into the per-variant DTS
+# (board/4stm4/mt7628/custom-mt7628-board-{8m,16m}.dts) — the test
+# test_dts_partitions_match_code_layout enforces they stay in sync.
 #
 # NOTE (path B / Buildroot + mainline): mainline has no OpenWrt mtdsplit, so the
 # single "firmware" region (0x050000..end) is split into EXPLICIT kernel+rootfs.
@@ -109,31 +110,56 @@ MT7628_FLASH_SIZE = 0x1000000            # 16 MB
 MT7628_FIRMWARE_START = 0x050000         # firmware region start (after factory)
 MT7628_FIRMWARE_KERNEL_SIZE = 0x200000   # 2 MB kernel cap — TODO: size to uImage
 
-def _mt7628_partitions(kernel_size: int = MT7628_FIRMWARE_KERNEL_SIZE) -> tuple[FlashPartition, ...]:
-    """Standard MT7628 ramips partition set. Only the flash size differs between
-    8M/16M variants — the fixed head (u-boot/env/factory/kernel) is identical and
-    rootfs grows to the end, so a new capacity is one line (see below)."""
+# Writable overlay (jffs2, rw) carved from the END of flash so an AP can persist
+# config across reboots. Path B has no OpenWrt mtdsplit, so this is an EXPLICIT
+# partition (not an auto rootfs_data). Left blank (0xFF) at build → fresh jffs2
+# on first boot. Sized per capacity:
+MT7628_16M_OVERLAY_SIZE = 0x100000       # 1 MB overlay on 16M
+MT7628_8M_OVERLAY_SIZE = 0x080000        # 512 KB overlay on 8M
+
+
+def _mt7628_partitions(
+    flash_size: int,
+    overlay_size: int,
+    kernel_size: int = MT7628_FIRMWARE_KERNEL_SIZE,
+) -> tuple[FlashPartition, ...]:
+    """Standard MT7628 ramips partition set with an explicit writable overlay.
+
+    Head (u-boot/env/factory/kernel) is identical across capacities. rootfs
+    (squashfs, ro) fills the middle; overlay (jffs2, rw) is the last partition
+    and grows to the end of flash. Only flash_size + overlay_size differ between
+    the 8M and 16M variants, so a new capacity is a one-liner.
+    """
+    kernel_off = MT7628_FIRMWARE_START
+    rootfs_off = kernel_off + kernel_size
+    overlay_off = flash_size - overlay_size
+    rootfs_size = overlay_off - rootfs_off
+    if rootfs_size <= 0:
+        raise ValueError(
+            f"no room for rootfs: kernel_size {kernel_size:#x} + overlay_size "
+            f"{overlay_size:#x} exceed firmware region of flash {flash_size:#x}"
+        )
     return (
         FlashPartition("u-boot",     0x000000, 0x030000, source="uboot", read_only=True),
         FlashPartition("u-boot-env", 0x030000, 0x010000, source=None,    read_only=True),
         # ART/EEPROM — per-device, never written by the assembler (STEP 2).
         FlashPartition("factory",    0x040000, 0x010000, preserve=True,  read_only=True),
-        FlashPartition("kernel",     MT7628_FIRMWARE_START, kernel_size, source="kernel"),
-        # rootfs grows to end of flash (size == 0).
-        FlashPartition("rootfs",     MT7628_FIRMWARE_START + kernel_size, 0, source="rootfs"),
+        FlashPartition("kernel",     kernel_off, kernel_size, source="kernel"),
+        FlashPartition("rootfs",     rootfs_off, rootfs_size, source="rootfs", read_only=True),
+        # Writable overlay — grows to end of flash (size == 0), blank at build.
+        FlashPartition("overlay",    overlay_off, 0, source=None),
     )
 
 
 MT7628_16M_LAYOUT = FlashLayout(
     flash_size=MT7628_FLASH_SIZE,          # 16 MB
     erase_block=ERASE_BLOCK,
-    partitions=_mt7628_partitions(),
+    partitions=_mt7628_partitions(MT7628_FLASH_SIZE, MT7628_16M_OVERLAY_SIZE),
 )
 
-# 8 MB variant — identical head, only the chip capacity changes; rootfs
-# auto-shrinks to ~5.9 MB (grow-to-end). Pure config, no code change.
+# 8 MB variant — identical head; smaller overlay so rootfs stays ~5.4 MB.
 MT7628_8M_LAYOUT = FlashLayout(
     flash_size=0x800000,                   # 8 MB
     erase_block=ERASE_BLOCK,
-    partitions=_mt7628_partitions(),
+    partitions=_mt7628_partitions(0x800000, MT7628_8M_OVERLAY_SIZE),
 )

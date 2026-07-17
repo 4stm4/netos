@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ * SHARED device tree for a custom MediaTek MT7628AN board.
+ *
+ * Common hardware for both flash-capacity variants. The flash *partitions*
+ * differ per capacity and live in the thin per-variant .dts files:
+ *   - custom-mt7628-board-16m.dts   (16 MB SPI-NOR)
+ *   - custom-mt7628-board-8m.dts    (8  MB SPI-NOR)
+ * Each variant's partition table MUST stay in sync with the matching layout in
+ * src/flash_layout.py (MT7628_16M_LAYOUT / MT7628_8M_LAYOUT).
+ *
+ *   SoC:   MT7628AN (MIPS 24KEc, little-endian)
+ *   RAM:   16-bit DDR2, 128 MB   (DDR init lives in U-Boot / MediaTek BSP —
+ *                                 OUT OF IMAGE SCOPE)
+ *   WiFi:  built-in 2.4 GHz 802.11n (mt7603, calibration from "factory" MTD)
+ *
+ * SKELETON — fill in before a real build (marked TODO):
+ *   - reset button GPIO pin
+ *   - status LED GPIO pin
+ *   - validate ethernet/switch port wiring against the schematic
+ */
+
+#include "mt7628a.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+/ {
+	compatible = "custom,mt7628-board", "ralink,mt7628an-soc";
+
+	chosen {
+		/* squashfs root comes from the "rootfs" MTD partition; the writable
+		 * jffs2 overlay ("overlay" partition) is mounted by early userspace
+		 * init (not via bootargs). */
+		bootargs = "console=ttyS0,115200";
+	};
+
+	aliases {
+		led-boot = &led_status;
+		led-running = &led_status;
+	};
+
+	/* ---- GPIO placeholders (edit one line per pin) ---- */
+	keys {
+		compatible = "gpio-keys";
+
+		reset {
+			label = "reset";
+			/* TODO: set real reset-button pin from EasyEDA schematic */
+			gpios = <&gpio 0 GPIO_ACTIVE_LOW>;   /* TODO pin */
+			linux,code = <KEY_RESTART>;
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_status: status {
+			label = "status";
+			/* TODO: set real status-LED pin from EasyEDA schematic */
+			gpios = <&gpio 0 GPIO_ACTIVE_LOW>;   /* TODO pin */
+		};
+	};
+};
+
+&spi0 {
+	status = "okay";
+
+	/* Flash chip common bits; the per-variant .dts adds &spiflash partitions. */
+	spiflash: flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <40000000>;
+	};
+};
+
+/* built-in 2.4 GHz WiFi (mt7603); calibration EEPROM from "factory" MTD @ 0x0.
+ * mediatek,mtd-eeprom is the widely-compatible form; nvmem-cells = <&eeprom_factory_0>
+ * is the newer alternative. &factory is labelled in the per-variant partitions. */
+&wmac {
+	status = "okay";
+	mediatek,mtd-eeprom = <&factory 0x0000>;
+};
+
+/* ethernet / built-in switch — enable and validate port wiring (TODO). */
+&ethernet {
+	status = "okay";
+	/* TODO: confirm LAN/WAN port split + phy-mode against schematic */
+};

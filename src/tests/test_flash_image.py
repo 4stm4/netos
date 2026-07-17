@@ -5,6 +5,7 @@ Run:
 """
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -35,10 +36,11 @@ def test_mt7628_layout_is_valid():
 
 def test_mt7628_layout_covers_full_flash_without_overlap():
     parts = MT7628_16M_LAYOUT.partitions
-    # contiguous, no gaps, rootfs reaches end
+    # contiguous, no gaps, overlay (last) reaches end
     assert parts[0].offset == 0
     for a, b in zip(parts, parts[1:]):
         assert a.end(MT7628_FLASH_SIZE) == b.offset, (a.name, b.name)
+    assert parts[-1].name == "overlay"
     assert parts[-1].end(MT7628_FLASH_SIZE) == MT7628_FLASH_SIZE
 
 
@@ -149,13 +151,14 @@ def test_oversize_artifact_raises():
 
 
 def test_8m_layout_valid_and_rootfs_budget():
-    from flash_layout import MT7628_8M_LAYOUT
+    from flash_layout import MT7628_8M_LAYOUT, MT7628_8M_OVERLAY_SIZE
     MT7628_8M_LAYOUT.validate()
     assert MT7628_8M_LAYOUT.flash_size == 0x800000
     rootfs = MT7628_8M_LAYOUT.by_source("rootfs")
-    # fixed head (u-boot 192k + env 64k + factory 64k + kernel 2M) then rootfs to end
+    # head (u-boot 192k + env 64k + factory 64k + kernel 2M), then rootfs, then
+    # overlay carved from the end.
     assert rootfs.offset == 0x250000
-    assert rootfs.resolved_size(0x800000) == 0x800000 - 0x250000  # ~5.94 MB
+    assert rootfs.resolved_size(0x800000) == 0x800000 - MT7628_8M_OVERLAY_SIZE - 0x250000
     # sanity: rootfs still comfortably larger than a minimal AP squashfs (~4 MB)
     assert rootfs.resolved_size(0x800000) > 4 * 1024 * 1024
 
@@ -170,7 +173,70 @@ def test_8m_assembles_full_image():
     assert out.stat().st_size == 0x800000
 
 
-def test_rootfs_grows_to_end():
-    rootfs = next(p for p in MT7628_16M_LAYOUT.partitions if p.name == "rootfs")
-    assert rootfs.size == 0
-    assert rootfs.resolved_size(MT7628_FLASH_SIZE) == MT7628_FLASH_SIZE - rootfs.offset
+@pytest.mark.parametrize("layout_name", ["MT7628_8M_LAYOUT", "MT7628_16M_LAYOUT"])
+def test_overlay_present_writable_and_grows_to_end(layout_name):
+    import flash_layout
+    L = getattr(flash_layout, layout_name)
+    overlay = next((p for p in L.partitions if p.name == "overlay"), None)
+    assert overlay is not None, "writable overlay partition must exist"
+    assert overlay.read_only is False
+    assert overlay.preserve is False
+    assert overlay.source is None            # blank at build → fresh jffs2 on boot
+    assert overlay.size == 0                  # grow-to-end
+    assert L.partitions[-1] is overlay        # must be last
+    assert overlay.end(L.flash_size) == L.flash_size
+
+
+_BOARD_DIR = _SRC.parent / "board" / "4stm4" / "mt7628"
+
+
+def _parse_dts_partitions(dts: Path) -> list[tuple[str, int, int]]:
+    """Extract (label, offset, size) triples from the partitions node of a .dts.
+
+    Matches ``label = "x";`` immediately followed (within a few lines) by
+    ``reg = <0xAAA 0xBBB>;`` — the partition entries. GPIO labels have no reg
+    and are skipped.
+    """
+    text = dts.read_text()
+    out: list[tuple[str, int, int]] = []
+    pat = re.compile(
+        r'label\s*=\s*"([^"]+)"\s*;\s*(?:reg\s*=\s*<\s*(0x[0-9a-fA-F]+)\s+(0x[0-9a-fA-F]+)\s*>\s*;)?'
+    )
+    for m in pat.finditer(text):
+        name, off, size = m.group(1), m.group(2), m.group(3)
+        if off is None:
+            continue  # e.g. gpio-keys/leds labels have no reg
+        out.append((name, int(off, 16), int(size, 16)))
+    return out
+
+
+@pytest.mark.parametrize("dts_name,layout_name", [
+    ("custom-mt7628-board-16m.dts", "MT7628_16M_LAYOUT"),
+    ("custom-mt7628-board-8m.dts",  "MT7628_8M_LAYOUT"),
+])
+def test_dts_partitions_match_code_layout(dts_name, layout_name):
+    """Guard against DTS <-> flash_layout.py drift: the .dts partition table must
+    equal the code layout (same names, offsets, and explicit sizes)."""
+    import flash_layout
+    L = getattr(flash_layout, layout_name)
+    dts_parts = _parse_dts_partitions(_BOARD_DIR / dts_name)
+
+    code_parts = [
+        (p.name, p.offset, p.resolved_size(L.flash_size)) for p in L.partitions
+    ]
+    assert dts_parts == code_parts, (
+        f"{dts_name} partitions differ from {layout_name}:\n"
+        f"  dts : {dts_parts}\n  code: {code_parts}"
+    )
+
+
+def test_overlay_region_blank_in_assembled_image():
+    work = Path(tempfile.mkdtemp())
+    kernel = _tmp(b"K" * 1000, "uImage")
+    rootfs = _tmp(b"R" * 5000, "root.squashfs")
+    out = work / "flash.bin"
+    assemble_flash_image(MT7628_16M_LAYOUT, {"kernel": kernel, "rootfs": rootfs}, out)
+    img = out.read_bytes()
+    overlay = next(p for p in MT7628_16M_LAYOUT.partitions if p.name == "overlay")
+    region = img[overlay.offset:overlay.end(MT7628_FLASH_SIZE)]
+    assert set(region) == {NOR_ERASED_BYTE}   # erased → jffs2 formats on first boot

@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ * Custom MT7628AN board — 8 MB SPI-NOR variant.
+ * Partition table MUST match src/flash_layout.py:MT7628_8M_LAYOUT.
+ *
+ * Path B (Buildroot + mainline): no OpenWrt mtdsplit, so the firmware region
+ * is split into EXPLICIT kernel + rootfs, and a writable jffs2 "overlay" is
+ * carved from the end of flash for persistent config.
+ */
+
+/dts-v1/;
+
+#include "custom-mt7628-board.dtsi"
+
+/ {
+	model = "Custom MT7628 Board 8M (SKELETON)";
+};
+
+&spiflash {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		partition@0 {
+			label = "u-boot";
+			reg = <0x000000 0x030000>;      /* 192k */
+			read-only;
+		};
+
+		partition@30000 {
+			label = "u-boot-env";
+			reg = <0x030000 0x010000>;      /* 64k */
+			read-only;
+		};
+
+		/* ART / EEPROM — per-device (MAC + RF calibration).
+		 * NEVER written by the image assembler. */
+		factory: partition@40000 {
+			label = "factory";
+			reg = <0x040000 0x010000>;      /* 64k */
+			read-only;
+
+			nvmem-layout {
+				compatible = "fixed-layout";
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				eeprom_factory_0: eeprom@0 {
+					reg = <0x0 0x400>;
+				};
+
+				macaddr_factory_4: macaddr@4 {
+					reg = <0x4 0x6>;
+				};
+			};
+		};
+
+		partition@50000 {
+			label = "kernel";
+			reg = <0x050000 0x200000>;      /* 2M cap — TODO size to real uImage */
+		};
+
+		partition@250000 {
+			label = "rootfs";
+			reg = <0x250000 0x530000>;      /* squashfs, ro — up to overlay */
+		};
+
+		partition@780000 {
+			label = "overlay";
+			reg = <0x780000 0x080000>;      /* 512k jffs2, rw — to end of 8M flash */
+		};
+	};
+};
