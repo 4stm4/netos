@@ -12,14 +12,14 @@ from targets import TargetConfig
 from netos_build.artifacts import ArtifactManager
 
 
-BUILDROOT_VERSION = os.environ.get("NETOS_BUILDROOT_VERSION", "2026.02.3")
+BUILDROOT_VERSION = os.environ.get("NETOS_BUILDROOT_VERSION", "2026.08")
 BUILDROOT_URL = os.environ.get(
     "NETOS_BUILDROOT_URL",
     f"https://buildroot.org/downloads/buildroot-{BUILDROOT_VERSION}.tar.xz",
 )
 BUILDROOT_SHA256 = os.environ.get(
     "NETOS_BUILDROOT_SHA256",
-    "5a59e7501b0b4ec52c41f4bfa79412320e0b37eae5f719605a258e8d0c6fc7fb",
+    "87aaca4164ea9d5c8085854953018263f7963f07c22e73a2a2185cc98c581c34",
 )
 
 NANODHCP_VERSION = os.environ.get(

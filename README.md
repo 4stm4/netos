@@ -4,7 +4,7 @@ A from-source embedded OS builder for ARM64 and x86_64 network appliances.
 
 Compiles Linux kernel + Buildroot userspace into a raw disk image ready to flash or boot in QEMU. No Ubuntu/Debian rootfs — the target system has no `apt`, `dpkg`, or `docker`; Buildroot owns the entire userspace.
 
-Current component versions: **Buildroot 2026.02.3**, **Open vSwitch 3.4.6**, Linux kernel up to **7.x** (mainline) or **rpi-6.18.y** (RPi).
+Current component versions: **Buildroot 2026.08**, **Open vSwitch 3.4.6**, Linux kernel up to **7.x** (mainline) or **rpi-6.18.y** (RPi).
 
 ---
 
@@ -107,7 +107,7 @@ Do not run as root — `sudo` is called automatically only where needed.
 | `NETOS_MAINLINE_KERNEL_VERSION` | `6.12.111` | Mainline version to download |
 | `NETOS_KERNEL_CONFIG_OPTIONS` | — | Space-separated `CONFIG_*=y/m/n` overrides |
 | `NETOS_BUILD_JOBS` | CPU count | Parallel build jobs |
-| `NETOS_BUILDROOT_VERSION` | `2026.02.3` | Buildroot version |
+| `NETOS_BUILDROOT_VERSION` | `2026.08` | Buildroot version |
 | `NETOS_CACHE_DIR` | `temp/cache` | Toolchain / rootfs cache directory |
 | `NETOS_CACHE_POLICY` | `use` | `use`, `rebuild`, or `ignore` |
 | `NETOS_HOSTNAME` | `netos` | Target hostname |
