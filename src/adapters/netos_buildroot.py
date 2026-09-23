@@ -24,11 +24,11 @@ BUILDROOT_SHA256 = os.environ.get(
 
 NANODHCP_VERSION = os.environ.get(
     "NETOS_NANODHCP_VERSION",
-    "ec0081fbf50185d90475a2ce929dbd93244a1ef9",
+    "405de917ee2a249f67a1857e045df67ef4f0a4be",
 )
 NANODHCP_SHA256 = os.environ.get(
     "NETOS_NANODHCP_SHA256",
-    "8570b6b3ed92a2d722c75fe6964eeefb42c5374ce8396ddb07b1fb1143ce9670",
+    "00bc831a3b270e11ebb54adbf0545e6be113e08639ec3da3e9eb04eea3946921",
 )
 
 # nanodns и tinywifi пинятся веткой (по умолчанию main) — сборщик берёт свежий
