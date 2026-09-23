@@ -4,8 +4,8 @@
 
 | Target | Архитектура | Ядро | Версия ядра | QEMU | WiFi |
 |--------|-------------|------|-------------|------|------|
-| `qemu-virt` | ARM64 (AArch64) | mainline kernel.org | 6.12.27 | да (machine=virt) | нет |
-| `qemu-x86` | x86_64 | mainline kernel.org | 6.12.27 | да (machine=q35) | нет |
+| `qemu-virt` | ARM64 (AArch64) | mainline kernel.org | 6.12.111 | да (machine=virt) | нет |
+| `qemu-x86` | x86_64 | mainline kernel.org | 6.12.111 | да (machine=q35) | нет |
 | `pi5` | ARM64 (BCM2712) | raspberrypi/linux | rpi-6.12.y | нет | нет (PCIe) |
 | `pi4` | ARM64 (BCM2711) | raspberrypi/linux | rpi-6.12.y | нет | нет |
 | `zero2w` | ARM64 (BCM2710) | raspberrypi/linux | rpi-6.12.y | нет | да |
@@ -15,7 +15,7 @@
 ## qemu-virt
 
 **Архитектура**: ARM64 (AArch64)
-**Ядро**: mainline kernel.org, версия `6.12.27` (задаётся `NETOS_MAINLINE_KERNEL_VERSION`)
+**Ядро**: mainline kernel.org, версия `6.12.111` (задаётся `NETOS_MAINLINE_KERNEL_VERSION`)
 **QEMU machine**: `virt`
 **QEMU CPU**: `cortex-a72`
 **Defconfig**: конфиг QEMU virt для ARM64
@@ -44,7 +44,7 @@ python3 src/main.py --target qemu-virt
 ## qemu-x86
 
 **Архитектура**: x86_64
-**Ядро**: mainline kernel.org, версия `6.12.27`
+**Ядро**: mainline kernel.org, версия `6.12.111`
 **QEMU machine**: `q35`
 **QEMU CPU**: `qemu64`
 **Defconfig**: конфиг QEMU x86_64

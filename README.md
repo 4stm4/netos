@@ -104,7 +104,7 @@ Do not run as root — `sudo` is called automatically only where needed.
 | `NETOS_TARGET` | — | Target name (alternative to `--target`) |
 | `NETOS_KERNEL_SOURCE` | `rpi` | `rpi` or `mainline` |
 | `NETOS_KERNEL_BRANCH` | `rpi-6.12.y` | RPi kernel branch |
-| `NETOS_MAINLINE_KERNEL_VERSION` | `6.12.27` | Mainline version to download |
+| `NETOS_MAINLINE_KERNEL_VERSION` | `6.12.111` | Mainline version to download |
 | `NETOS_KERNEL_CONFIG_OPTIONS` | — | Space-separated `CONFIG_*=y/m/n` overrides |
 | `NETOS_BUILD_JOBS` | CPU count | Parallel build jobs |
 | `NETOS_BUILDROOT_VERSION` | `2026.02.3` | Buildroot version |

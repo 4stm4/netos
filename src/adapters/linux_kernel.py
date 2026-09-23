@@ -53,8 +53,20 @@ RPI_FIRMWARE_BASE_URL = _env(
     legacy_name="LITAINER_RPI_FIRMWARE_BASE_URL",
 )
 
-MAINLINE_KERNEL_VERSION      = _env("NETOS_MAINLINE_KERNEL_VERSION", "6.12.27")
-MAINLINE_KERNEL_SHA256       = _env("NETOS_MAINLINE_KERNEL_SHA256")  # optional; verified if set
+MAINLINE_KERNEL_VERSION      = _env("NETOS_MAINLINE_KERNEL_VERSION", "6.12.111")
+
+# Published checksums for versions we ship by default.  Any other version stays
+# unverified unless NETOS_MAINLINE_KERNEL_SHA256 is supplied, so picking an
+# arbitrary kernel in the configurator keeps working.
+_MAINLINE_KERNEL_KNOWN_SHA256: dict[str, str] = {
+    "6.12.111": "9e59dc67624188fa12a6601f9598499cd6662a9066be572b59f935e3d7849810",
+    "6.12.27":  "8f4655a4cc7f93d72f515bbca54756de26ddaf5949790da6a17f766e3c33dc79",
+}
+
+MAINLINE_KERNEL_SHA256       = (
+    _env("NETOS_MAINLINE_KERNEL_SHA256")
+    or _MAINLINE_KERNEL_KNOWN_SHA256.get(MAINLINE_KERNEL_VERSION)
+)  # optional; verified if known or set
 
 
 class LinuxKernel:
