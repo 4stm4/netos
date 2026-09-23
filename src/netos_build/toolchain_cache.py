@@ -21,7 +21,7 @@ Cache key
 ---------
 ``{arch}-br{buildroot_version}-{config_hash8}``
 
-Example: ``arm64-br2026.02.1-a2b3c4d5.tar.gz``
+Example: ``arm64-br2026.08-a2b3c4d5.tar.gz``
 
 The config hash covers: buildroot_arch, cross_compile, buildroot_version,
 and the toolchain options (GLIBC + CXX).  A change in any of these
@@ -30,8 +30,8 @@ produces a different key and triggers a fresh build + new cache entry.
 Layout::
 
     temp/cache/toolchains/
-        arm64-br2026.02.1-a2b3c4d5.tar.gz
-        x86_64-br2026.02.1-e5f6a7b8.tar.gz
+        arm64-br2026.08-a2b3c4d5.tar.gz
+        x86_64-br2026.08-e5f6a7b8.tar.gz
         index.json
 """
 from __future__ import annotations

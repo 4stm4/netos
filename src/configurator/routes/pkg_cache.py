@@ -47,7 +47,7 @@ def _buildroot_dl_dir() -> Optional[Path]:
 
 def _buildroot_version() -> Optional[str]:
     temp = PROJECT_ROOT / "temp"
-    # match only versioned dirs like buildroot-2026.02.1, not buildroot-output-*
+    # match only versioned dirs like buildroot-2026.08, not buildroot-output-*
     import re
     for d in sorted(temp.glob("buildroot-[0-9]*"), reverse=True):
         if re.match(r"buildroot-\d{4}\.\d+", d.name) and d.is_dir():

@@ -24,8 +24,8 @@ produces a different key and triggers a fresh build + new cache entry.
 Layout::
 
     temp/cache/rootfs/
-        arm64-br2026.02.1-a1b2c3d4e5f60708.rootfs.tar.gz
-        x86_64-br2026.02.1-1122334455667788.rootfs.tar.gz
+        arm64-br2026.08-a1b2c3d4e5f60708.rootfs.tar.gz
+        x86_64-br2026.08-1122334455667788.rootfs.tar.gz
         index.json
 """
 from __future__ import annotations

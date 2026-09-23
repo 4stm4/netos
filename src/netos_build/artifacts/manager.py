@@ -6,9 +6,9 @@ Usage::
 
     # Download Buildroot tarball (with SHA-256 verification):
     archive = mgr.fetch(
-        url    = "https://buildroot.org/downloads/buildroot-2026.02.1.tar.xz",
-        sha256 = "a2216fdc...",
-        filename = "buildroot-2026.02.1.tar.xz",
+        url    = "https://buildroot.org/downloads/buildroot-2026.08.tar.xz",
+        sha256 = "87aaca41...",
+        filename = "buildroot-2026.08.tar.xz",
     )
 
     # Download mainline kernel (hash unknown yet — omit sha256):
