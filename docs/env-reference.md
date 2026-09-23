@@ -29,7 +29,7 @@
 
 | Переменная | По умолчанию | Описание |
 |------------|-------------|----------|
-| `NETOS_OPENVSWITCH_VERSION` | `3.4.1` | Версия Open vSwitch для сборки. |
+| `NETOS_OPENVSWITCH_VERSION` | `3.4.6` | Версия Open vSwitch для сборки. |
 | `NETOS_OPENVSWITCH_SHA256` | (задано в коде) | SHA256-хеш исходников OVS для верификации. |
 
 ---

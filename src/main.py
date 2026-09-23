@@ -4,7 +4,7 @@ from adapters.logging_adapter import LoggingAdapter
 from adapters.network_adapter import NetworkAdapter
 from adapters.package_installer import install_dependencies
 from adapters.linux_kernel import LinuxKernel
-from adapters.netos_buildroot import NetOSBuildrootBuilder, BUILDROOT_VERSION, BUILDROOT_URL, BUILDROOT_SHA256, OPENVSWITCH_VERSION
+from adapters.netos_buildroot import NetOSBuildrootBuilder, BUILDROOT_VERSION, BUILDROOT_URL, BUILDROOT_SHA256, OPENVSWITCH_VERSION, OPENVSWITCH_SHA256
 from adapters.tinywifi_setup import TinyWifiSetup
 from make_image import create_img
 from netos_branding import NETOS_HOSTNAME
@@ -313,6 +313,6 @@ if __name__ == "__main__":
 
     # Update lock file with the artifact versions actually used in this build
     lock.record("buildroot",   version=BUILDROOT_VERSION,   url=BUILDROOT_URL,   sha256=BUILDROOT_SHA256)
-    lock.record("openvswitch", version=OPENVSWITCH_VERSION, url=f"https://www.openvswitch.org/releases/openvswitch-{OPENVSWITCH_VERSION}.tar.gz", sha256="")
+    lock.record("openvswitch", version=OPENVSWITCH_VERSION, url=f"https://www.openvswitch.org/releases/openvswitch-{OPENVSWITCH_VERSION}.tar.gz", sha256=OPENVSWITCH_SHA256)
     lock.save()
     logging_adapter.info("Build complete. Lock file: %s", PROJECT_ROOT / "netos.lock.json")

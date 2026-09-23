@@ -151,7 +151,7 @@ Open vSwitch (OVS) собирается как **external Buildroot package** и
 netos-buildroot-external/package/openvswitch/
 ```
 
-Версия задаётся переменной `NETOS_OPENVSWITCH_VERSION` (по умолчанию `3.4.1`).
+Версия задаётся переменной `NETOS_OPENVSWITCH_VERSION` (по умолчанию `3.4.6`).
 
 OVS включается в образ через категорию `ovs_kvm` в `packages.yaml`. При включении в defconfig добавляются:
 

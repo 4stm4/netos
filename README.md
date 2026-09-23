@@ -4,7 +4,7 @@ A from-source embedded OS builder for ARM64 and x86_64 network appliances.
 
 Compiles Linux kernel + Buildroot userspace into a raw disk image ready to flash or boot in QEMU. No Ubuntu/Debian rootfs — the target system has no `apt`, `dpkg`, or `docker`; Buildroot owns the entire userspace.
 
-Current component versions: **Buildroot 2026.02.3**, **Open vSwitch 3.4.1**, Linux kernel up to **7.x** (mainline) or **rpi-6.12.y** (RPi).
+Current component versions: **Buildroot 2026.02.3**, **Open vSwitch 3.4.6**, Linux kernel up to **7.x** (mainline) or **rpi-6.12.y** (RPi).
 
 ---
 

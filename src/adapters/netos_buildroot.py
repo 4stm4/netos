@@ -38,13 +38,18 @@ NANODNS_VERSION = os.environ.get("NETOS_NANODNS_VERSION", "main")
 TINYWIFI_VERSION = os.environ.get("NETOS_TINYWIFI_VERSION", "main")
 
 _OPENVSWITCH_KNOWN_SHA256: dict[str, tuple[str, str]] = {
+    # version: (tarball sha256, LICENSE file sha256)
+    "3.4.6": (
+        "1e7b6b3f86d86da06b1609ad9e619919510b9f9146d5b671cfbd31c199cdeac4",
+        "f41f887b04dd604250193ddd88691ecd168dacdecca2d0d6581d8840e3f0b0dc",
+    ),
     "3.4.1": (
         "6e97ec7dfdda5b40b5103946d53e4f8b11edf66049fedbdcb323e1af67133de8",
         "f41f887b04dd604250193ddd88691ecd168dacdecca2d0d6581d8840e3f0b0dc",
     ),
 }
 
-OPENVSWITCH_VERSION = os.environ.get("NETOS_OPENVSWITCH_VERSION", "3.4.1")
+OPENVSWITCH_VERSION = os.environ.get("NETOS_OPENVSWITCH_VERSION", "3.4.6")
 
 if OPENVSWITCH_VERSION not in _OPENVSWITCH_KNOWN_SHA256:
     _custom_sha256 = os.environ.get("NETOS_OPENVSWITCH_SHA256")
