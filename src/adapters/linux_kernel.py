@@ -13,22 +13,22 @@ RPI_REPO_URL = "https://github.com/raspberrypi/linux.git"
 DEFAULT_RPI_BRANCH = "rpi-6.12.y"
 MAINLINE_KERNEL_BASE_URL = "https://cdn.kernel.org/pub/linux/kernel"
 
-AMNEZIAWG_VERSION = os.environ.get("NETOS_AMNEZIAWG_VERSION", "v1.0.20260611")
+AMNEZIAWG_VERSION = os.environ.get("NETOS_AMNEZIAWG_VERSION", "v3.1.20260906")
 AMNEZIAWG_SHA256 = os.environ.get(
     "NETOS_AMNEZIAWG_SHA256",
-    "e062ecc9f1d89eeafa9f56a29473372a1d796ee061eaa8c7b61eeb51c38b80d6",
+    "e32fa46f1b6f9e319c5261f0b0765c3a9261e40cb7c4616fd73500da961a2932",
 )
 
-AMNEZIAWG_TOOLS_VERSION = os.environ.get("NETOS_AMNEZIAWG_TOOLS_VERSION", "v1.0.20260618")
+AMNEZIAWG_TOOLS_VERSION = os.environ.get("NETOS_AMNEZIAWG_TOOLS_VERSION", "v3.1.20260812")
 AMNEZIAWG_TOOLS_SHA256 = os.environ.get(
     "NETOS_AMNEZIAWG_TOOLS_SHA256",
-    "f1993084634bb9e957d0b14756e019a4af2f4e9c08d73362cce3ab14cb92ea7b",
+    "dbd8ce0748d835d18f30bb76720246b7bfc80bd09cd17c379b1c59f683a18493",
 )
 
-AMNEZIAWG_GO_VERSION = os.environ.get("NETOS_AMNEZIAWG_GO_VERSION", "v0.2.19")
+AMNEZIAWG_GO_VERSION = os.environ.get("NETOS_AMNEZIAWG_GO_VERSION", "v3.1.20260828")
 AMNEZIAWG_GO_SHA256 = os.environ.get(
     "NETOS_AMNEZIAWG_GO_SHA256",
-    "d2fde8df81199e2350b43f387fe79b3056a2278457504fa1f91cd170cb0f474b",
+    "24c656cfb80ff6855702710eaf2e3729fa710bf6bfdbbbdfba01984ccd17de95",
 )
 
 # Go toolchain for building amneziawg-go (linux/arm64 native on RPi5 build server).
