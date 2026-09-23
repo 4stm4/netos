@@ -123,7 +123,7 @@ class KernelConfig(BaseModel):
     """Kernel version overrides. Empty string = use compiled-in default."""
     # For RPi targets (kernel_source="rpi"): branch name, e.g. "rpi-6.18.y"
     rpi_branch: str = ""
-    # For mainline/QEMU targets (kernel_source="mainline"): version, e.g. "6.12.27"
+    # For mainline/QEMU targets (kernel_source="mainline"): version, e.g. "6.12.111"
     mainline_version: str = ""
     # CONFIG_*=y lines (subsystems/features)
     options: list[str] = []

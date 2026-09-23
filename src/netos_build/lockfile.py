@@ -18,8 +18,8 @@ Layout::
           "sha256":  "a2216fdc..."
         },
         "linux-mainline": {
-          "version": "6.12.27",
-          "url":     "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.27.tar.xz",
+          "version": "6.12.111",
+          "url":     "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.111.tar.xz",
           "sha256":  ""
         },
         "openvswitch": {

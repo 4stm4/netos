@@ -13,8 +13,8 @@ Usage::
 
     # Download mainline kernel (hash unknown yet — omit sha256):
     kernel_tar = mgr.fetch(
-        url      = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.27.tar.xz",
-        filename = "linux-6.12.27.tar.xz",
+        url      = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.111.tar.xz",
+        filename = "linux-6.12.111.tar.xz",
     )
 """
 from __future__ import annotations

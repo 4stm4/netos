@@ -152,7 +152,7 @@ class FetchPackageRequest(BaseModel):
 class FetchKernelRequest(BaseModel):
     source: str               # "rpi" | "mainline"
     branch: Optional[str] = None     # for rpi: "rpi-6.18.y"
-    version: Optional[str] = None    # for mainline: "6.12.27"
+    version: Optional[str] = None    # for mainline: "6.12.111"
 
 
 @router.get("/pkg-cache/status")
@@ -349,7 +349,7 @@ async def fetch_kernel(req: FetchKernelRequest):
         return {"job_id": job_id, "label": label, "dest": str(dest)}
 
     elif req.source == "mainline":
-        version = req.version or "6.12.27"
+        version = req.version or "6.12.111"
         major = version.split(".")[0]
         filename = f"linux-{version}.tar.xz"
         url = f"https://cdn.kernel.org/pub/linux/kernel/v{major}.x/{filename}"

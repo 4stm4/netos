@@ -51,16 +51,16 @@ def _fetch_mainline() -> list[dict]:
 
 
 _MAINLINE_FALLBACK = [
-    {"version": "6.12.27", "moniker": "stable",   "iseol": False, "released": "2025-04-16", "eol": "2026-01"},
-    {"version": "6.6.87",  "moniker": "longterm",  "iseol": False, "released": "2025-04-09", "eol": "2026-12"},
-    {"version": "6.1.133", "moniker": "longterm",  "iseol": False, "released": "2025-04-09", "eol": "2028-01"},
-    {"version": "5.15.179","moniker": "longterm",  "iseol": False, "released": "2025-04-09", "eol": "2026-10"},
-    {"version": "5.10.236","moniker": "longterm",  "iseol": False, "released": "2025-04-09", "eol": "2026-12"},
-    {"version": "5.4.292", "moniker": "longterm",  "iseol": False, "released": "2025-04-09", "eol": "2025-12"},
-    {"version": "4.19.330","moniker": "longterm",  "iseol": False, "released": "2025-04-09", "eol": "2024-12"},
-    {"version": "4.14.x",  "moniker": "longterm",  "iseol": True,  "released": "2017-11-12", "eol": "2024-01"},
-    {"version": "4.9.x",   "moniker": "longterm",  "iseol": True,  "released": "2016-12-11", "eol": "2023-01"},
-    {"version": "4.4.x",   "moniker": "longterm",  "iseol": True,  "released": "2016-01-10", "eol": "2022-02"},
+    # Snapshot of kernel.org/releases.json, refreshed 2026-09-23.  Only used
+    # when the live fetch fails; "eol" is empty because releases.json no longer
+    # carries EOL dates, matching what _fetch_mainline() produces.
+    {"version": "7.2.7",    "moniker": "stable",   "iseol": False, "released": "2026-09-21", "eol": ""},
+    {"version": "6.18.53",  "moniker": "longterm", "iseol": False, "released": "2026-09-21", "eol": ""},
+    {"version": "6.12.111", "moniker": "longterm", "iseol": False, "released": "2026-09-21", "eol": ""},
+    {"version": "6.6.157",  "moniker": "longterm", "iseol": False, "released": "2026-09-14", "eol": ""},
+    {"version": "6.1.188",  "moniker": "longterm", "iseol": False, "released": "2026-09-14", "eol": ""},
+    {"version": "5.15.221", "moniker": "longterm", "iseol": False, "released": "2026-09-14", "eol": ""},
+    {"version": "5.10.270", "moniker": "longterm", "iseol": False, "released": "2026-09-14", "eol": ""},
 ]
 
 

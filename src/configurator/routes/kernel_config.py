@@ -42,8 +42,8 @@ def _defconfig_url(
             f"{br}/arch/{arch_dir}/configs/{defconfig}"
         )
     # mainline
-    ver = version or "6.12.27"
-    # strip patch part for tag lookup: 6.12.27 -> v6.12.27
+    ver = version or "6.12.111"
+    # strip patch part for tag lookup: 6.12.111 -> v6.12.111
     tag = f"v{ver}"
     if kernel_arch in ("x86", "x86_64"):
         arch_dir = "x86"
@@ -109,7 +109,7 @@ def get_defconfig(
     """Return parsed defconfig for target.
 
     ``branch``  — RPi branch, e.g. ``rpi-6.18.y``
-    ``version`` — mainline version, e.g. ``6.12.27``
+    ``version`` — mainline version, e.g. ``6.12.111``
     """
     meta = _TARGET_META.get(target)
     if not meta:

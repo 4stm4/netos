@@ -4,7 +4,7 @@ Layout::
 
     temp/cache/downloads/
         buildroot-2026.02.1.tar.xz
-        linux-6.12.27.tar.xz
+        linux-6.12.111.tar.xz
         openvswitch-3.4.1.tar.gz
         index.json          ← {filename: {url, sha256, size, cached_at}}
 
