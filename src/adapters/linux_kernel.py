@@ -31,11 +31,13 @@ AMNEZIAWG_GO_SHA256 = os.environ.get(
     "d2fde8df81199e2350b43f387fe79b3056a2278457504fa1f91cd170cb0f474b",
 )
 
-# Go toolchain for building amneziawg-go (linux/arm64 native on RPi5 build server)
-GO_VERSION = os.environ.get("NETOS_GO_VERSION", "1.23.4")
+# Go toolchain for building amneziawg-go (linux/arm64 native on RPi5 build server).
+# Must satisfy the `go` directive in amneziawg-go's go.mod, otherwise the build
+# silently pulls a second toolchain over the network (see GOTOOLCHAIN below).
+GO_VERSION = os.environ.get("NETOS_GO_VERSION", "1.27.1")
 GO_SHA256_ARM64 = os.environ.get(
     "NETOS_GO_SHA256_ARM64",
-    "16e5017863a7f6071363782b1b8042eb12c6ca4f4cd71528b2123f0a1275b13e",
+    "3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec",
 )
 
 
@@ -615,6 +617,11 @@ class LinuxKernel:
         env["GOARCH"] = "arm64"
         env["CGO_ENABLED"] = "0"
         env["GOFLAGS"] = ""
+        # Refuse to silently fetch another toolchain when go.mod asks for a
+        # newer Go than GO_VERSION: that download bypasses GO_SHA256_ARM64, so
+        # we would be building with an unverified compiler.  Fail loudly and let
+        # whoever bumps NETOS_AMNEZIAWG_GO_VERSION bump NETOS_GO_VERSION too.
+        env["GOTOOLCHAIN"] = "local"
         # Write a static version.go since there's no git tag in the extracted tarball
         (src_dir / "version.go").write_text(
             f'package main\n\nconst Version = "{AMNEZIAWG_GO_VERSION}"\n'
