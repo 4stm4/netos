@@ -101,6 +101,7 @@ def _fetch_rpi() -> list[dict]:
 
 
 _RPI_FALLBACK = [
+    {"branch": "rpi-6.18.y", "version": "6.18", "lts": True,  "major": 6, "minor": 18},
     {"branch": "rpi-6.12.y", "version": "6.12", "lts": True,  "major": 6, "minor": 12},
     {"branch": "rpi-6.6.y",  "version": "6.6",  "lts": True,  "major": 6, "minor": 6},
     {"branch": "rpi-6.1.y",  "version": "6.1",  "lts": True,  "major": 6, "minor": 1},
@@ -123,12 +124,12 @@ def get_kernel_versions(source: str = "mainline") -> dict:
     if source == "rpi":
         return {
             "source": "rpi",
-            "default_branch": "rpi-6.12.y",
+            "default_branch": "rpi-6.18.y",
             "branches": _cached("rpi", _fetch_rpi),
         }
     # mainline
     return {
         "source": "mainline",
-        "default_version": "6.12.27",
+        "default_version": "6.12.111",
         "releases": _cached("mainline", _fetch_mainline),
     }

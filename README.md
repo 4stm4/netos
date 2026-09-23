@@ -4,7 +4,7 @@ A from-source embedded OS builder for ARM64 and x86_64 network appliances.
 
 Compiles Linux kernel + Buildroot userspace into a raw disk image ready to flash or boot in QEMU. No Ubuntu/Debian rootfs — the target system has no `apt`, `dpkg`, or `docker`; Buildroot owns the entire userspace.
 
-Current component versions: **Buildroot 2026.02.3**, **Open vSwitch 3.4.6**, Linux kernel up to **7.x** (mainline) or **rpi-6.12.y** (RPi).
+Current component versions: **Buildroot 2026.02.3**, **Open vSwitch 3.4.6**, Linux kernel up to **7.x** (mainline) or **rpi-6.18.y** (RPi).
 
 ---
 
@@ -15,9 +15,9 @@ Current component versions: **Buildroot 2026.02.3**, **Open vSwitch 3.4.6**, Lin
 | `qemu-virt` | ARM64 | mainline | `qemu-virt.img` | 512 MB |
 | `qemu-x86` | x86\_64 | mainline | `qemu-x86.img` | 512 MB |
 | `qemu-wifi` | ARM64 | mainline + mac80211\_hwsim | `qemu-wifi.img` | 512 MB |
-| `pi5` | ARM64 | rpi-6.12.y | `raspi.img` | 1024 MB |
-| `pi4` | ARM64 | rpi-6.12.y | `raspi-pi4.img` | 1024 MB |
-| `zero2w` | ARM64 | rpi-6.12.y | `raspi-zero2w.img` | 192 MB |
+| `pi5` | ARM64 | rpi-6.18.y | `raspi.img` | 1024 MB |
+| `pi4` | ARM64 | rpi-6.18.y | `raspi-pi4.img` | 1024 MB |
+| `zero2w` | ARM64 | rpi-6.18.y | `raspi-zero2w.img` | 192 MB |
 
 All RPi targets support mainline kernel via `NETOS_KERNEL_SOURCE=mainline`.
 
@@ -103,7 +103,7 @@ Do not run as root — `sudo` is called automatically only where needed.
 | `NETOS_APPLIANCE` | `netos` | `netos` or `tinywifi` |
 | `NETOS_TARGET` | — | Target name (alternative to `--target`) |
 | `NETOS_KERNEL_SOURCE` | `rpi` | `rpi` or `mainline` |
-| `NETOS_KERNEL_BRANCH` | `rpi-6.12.y` | RPi kernel branch |
+| `NETOS_KERNEL_BRANCH` | `rpi-6.18.y` | RPi kernel branch |
 | `NETOS_MAINLINE_KERNEL_VERSION` | `6.12.111` | Mainline version to download |
 | `NETOS_KERNEL_CONFIG_OPTIONS` | — | Space-separated `CONFIG_*=y/m/n` overrides |
 | `NETOS_BUILD_JOBS` | CPU count | Parallel build jobs |

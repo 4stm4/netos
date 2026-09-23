@@ -10,7 +10,7 @@ from netos_build.artifacts import ArtifactManager
 
 
 RPI_REPO_URL = "https://github.com/raspberrypi/linux.git"
-DEFAULT_RPI_BRANCH = "rpi-6.12.y"
+DEFAULT_RPI_BRANCH = "rpi-6.18.y"
 MAINLINE_KERNEL_BASE_URL = "https://cdn.kernel.org/pub/linux/kernel"
 
 AMNEZIAWG_VERSION = os.environ.get("NETOS_AMNEZIAWG_VERSION", "v3.1.20260906")

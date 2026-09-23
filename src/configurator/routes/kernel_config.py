@@ -35,7 +35,7 @@ def _defconfig_url(
     version: Optional[str] = None,
 ) -> str:
     if kernel_source == "rpi":
-        br = branch or "rpi-6.12.y"
+        br = branch or "rpi-6.18.y"
         arch_dir = "arm64" if kernel_arch == "arm64" else kernel_arch
         return (
             f"https://raw.githubusercontent.com/raspberrypi/linux/"
@@ -108,7 +108,7 @@ def get_defconfig(
 ) -> dict:
     """Return parsed defconfig for target.
 
-    ``branch``  — RPi branch, e.g. ``rpi-6.12.y``
+    ``branch``  — RPi branch, e.g. ``rpi-6.18.y``
     ``version`` — mainline version, e.g. ``6.12.27``
     """
     meta = _TARGET_META.get(target)

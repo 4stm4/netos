@@ -151,7 +151,7 @@ class FetchPackageRequest(BaseModel):
 
 class FetchKernelRequest(BaseModel):
     source: str               # "rpi" | "mainline"
-    branch: Optional[str] = None     # for rpi: "rpi-6.12.y"
+    branch: Optional[str] = None     # for rpi: "rpi-6.18.y"
     version: Optional[str] = None    # for mainline: "6.12.27"
 
 
@@ -321,7 +321,7 @@ async def fetch_kernel(req: FetchKernelRequest):
     temp.mkdir(parents=True, exist_ok=True)
 
     if req.source == "rpi":
-        branch = req.branch or "rpi-6.12.y"
+        branch = req.branch or "rpi-6.18.y"
         url = f"https://github.com/raspberrypi/linux/archive/refs/heads/{branch}.tar.gz"
         dest = temp / f"rpi_linux-{branch}.tar.gz"
         label = f"Ядро RPi {branch}"

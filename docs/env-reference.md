@@ -18,7 +18,7 @@
 
 | Переменная | По умолчанию | Описание |
 |------------|-------------|----------|
-| `NETOS_KERNEL_BRANCH` | `rpi-6.12.y` | Ветка ядра для RPi-целей (из `raspberrypi/linux`). |
+| `NETOS_KERNEL_BRANCH` | `rpi-6.18.y` | Ветка ядра для RPi-целей (из `raspberrypi/linux`). |
 | `NETOS_MAINLINE_KERNEL_VERSION` | `6.12.111` | Версия mainline-ядра для QEMU-целей (с `kernel.org`). |
 | `NETOS_KERNEL_TARBALL_URL` | (вычисляется) | Явный URL tarball'а ядра. Переопределяет автоматический URL по версии. |
 | `NETOS_PREBUILT_KERNEL_IMAGE` | не задано | Путь к готовому образу ядра. Если задан — пропускает сборку ядра. |

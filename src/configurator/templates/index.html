@@ -524,7 +524,7 @@
         </div>
         <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
           <label style="font-size:13px;color:var(--muted)">Выбрано:</label>
-          <code style="font-size:13px" x-text="profile.kernel.rpi_branch || ('по умолчанию (' + (kernelData?.default_branch || 'rpi-6.12.y') + ')')"></code>
+          <code style="font-size:13px" x-text="profile.kernel.rpi_branch || ('по умолчанию (' + (kernelData?.default_branch || 'rpi-6.18.y') + ')')"></code>
           <button class="btn-sm" x-show="profile.kernel.rpi_branch"
             @click="profile.kernel.rpi_branch = ''">✕ сбросить</button>
         </div>
@@ -546,7 +546,7 @@
             <label>Ветка RPi
               <span class="field-hint">Например: <code>rpi-6.6.y</code></span>
             </label>
-            <input x-model="profile.kernel.rpi_branch" placeholder="rpi-6.12.y  (пусто = по умолчанию)">
+            <input x-model="profile.kernel.rpi_branch" placeholder="rpi-6.18.y  (пусто = по умолчанию)">
           </div>
         </div>
       </section>
@@ -1131,10 +1131,10 @@
             </div>
             <div x-show="pkgFetchKernelForm.source==='rpi'">
               <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:3px">Ветка</label>
-              <input type="text" x-model="pkgFetchKernelForm.branch" placeholder="rpi-6.12.y" class="inp-sm" style="width:150px">
+              <input type="text" x-model="pkgFetchKernelForm.branch" placeholder="rpi-6.18.y" class="inp-sm" style="width:150px">
             </div>
             <div x-show="pkgFetchKernelForm.source==='rpi'" style="padding-top:18px;display:flex;gap:4px">
-              <template x-for="b in ['rpi-6.1.y','rpi-6.6.y','rpi-6.12.y']" :key="b">
+              <template x-for="b in ['rpi-6.1.y','rpi-6.6.y','rpi-6.12.y','rpi-6.18.y']" :key="b">
                 <button class="btn-xs" @click="pkgFetchKernelForm.branch=b"
                         :class="{active: pkgFetchKernelForm.branch===b}" x-text="b"></button>
               </template>
@@ -1425,7 +1425,7 @@ function app() {
     pkgCacheTab:      'packages',
     pkgJobsTimer:     null,
     pkgFetchForm:     { name: '', version: '', url: '', filename: '' },
-    pkgFetchKernelForm: { source: 'rpi', branch: 'rpi-6.12.y', version: '6.12.27' },
+    pkgFetchKernelForm: { source: 'rpi', branch: 'rpi-6.18.y', version: '6.12.111' },
     pkgQuickPackages: [
       // Use sources.buildroot.net as primary mirror — much more reliable than upstream nongnu/savannah
       { name: 'attr',    version: '2.5.2', url: 'https://sources.buildroot.net/attr/attr-2.5.2.tar.xz' },

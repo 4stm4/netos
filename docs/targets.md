@@ -6,9 +6,9 @@
 |--------|-------------|------|-------------|------|------|
 | `qemu-virt` | ARM64 (AArch64) | mainline kernel.org | 6.12.111 | да (machine=virt) | нет |
 | `qemu-x86` | x86_64 | mainline kernel.org | 6.12.111 | да (machine=q35) | нет |
-| `pi5` | ARM64 (BCM2712) | raspberrypi/linux | rpi-6.12.y | нет | нет (PCIe) |
-| `pi4` | ARM64 (BCM2711) | raspberrypi/linux | rpi-6.12.y | нет | нет |
-| `zero2w` | ARM64 (BCM2710) | raspberrypi/linux | rpi-6.12.y | нет | да |
+| `pi5` | ARM64 (BCM2712) | raspberrypi/linux | rpi-6.18.y | нет | нет (PCIe) |
+| `pi4` | ARM64 (BCM2711) | raspberrypi/linux | rpi-6.18.y | нет | нет |
+| `zero2w` | ARM64 (BCM2710) | raspberrypi/linux | rpi-6.18.y | нет | да |
 
 ---
 
@@ -73,7 +73,7 @@ python3 src/main.py --target qemu-x86
 ## pi5
 
 **Архитектура**: ARM64 (BCM2712, Cortex-A76)
-**Ядро**: `raspberrypi/linux`, ветка `rpi-6.12.y`
+**Ядро**: `raspberrypi/linux`, ветка `rpi-6.18.y`
 **Defconfig**: `bcm2712_defconfig`
 **Kernel image**: `kernel_2712.img`
 
@@ -107,7 +107,7 @@ sudo dd if=output/raspi.img of=/dev/sdX bs=4M status=progress conv=fsync
 ## pi4
 
 **Архитектура**: ARM64 (BCM2711, Cortex-A72)
-**Ядро**: `raspberrypi/linux`, ветка `rpi-6.12.y`
+**Ядро**: `raspberrypi/linux`, ветка `rpi-6.18.y`
 **Defconfig**: `bcm2711_defconfig`
 **Kernel image**: `kernel8.img`
 
@@ -141,7 +141,7 @@ sudo dd if=output/raspi.img of=/dev/sdX bs=4M status=progress conv=fsync
 ## zero2w
 
 **Архитектура**: ARM64 (BCM2710, Cortex-A53)
-**Ядро**: `raspberrypi/linux`, ветка `rpi-6.12.y`
+**Ядро**: `raspberrypi/linux`, ветка `rpi-6.18.y`
 **Defconfig**: `bcm2711_defconfig`
 **Kernel image**: `kernel8.img`
 

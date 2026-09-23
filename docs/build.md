@@ -36,7 +36,7 @@ sudo apt install -y gcc-x86-64-linux-gnu binutils-x86-64-linux-gnu
 
 Точка входа — `src/main.py`. Пайплайн выполняется последовательно:
 
-1. **Загрузка ядра** — скачивается tarball ядра с kernel.org (mainline) или клонируется ветка `rpi-6.12.y` из `raspberrypi/linux` для RPi-целей
+1. **Загрузка ядра** — скачивается tarball ядра с kernel.org (mainline) или клонируется ветка `rpi-6.18.y` из `raspberrypi/linux` для RPi-целей
 2. **Конфигурация ядра** — применяется `defconfig` для целевой платформы (`bcm2712_defconfig`, `bcm2711_defconfig`, QEMU config)
 3. **Компиляция ядра** — `make` с числом потоков по `NETOS_BUILD_JOBS`
 4. **Загрузка и настройка Buildroot** — скачивается версия Buildroot (`NETOS_BUILDROOT_VERSION`), подключается external-дерево `netos-buildroot-external/`
