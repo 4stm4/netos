@@ -1,2 +1,18 @@
-requests
-beautifulsoup4 
+# Host-side build dependencies for netOS.
+#
+# These are needed only on the build host — the target userspace is produced by
+# Buildroot and ships its own Python (see docs/packages.md).
+#
+#   python3 -m pip install -r requirements.txt
+
+# Build orchestrator: --profile parsing, package and kernel catalogs
+PyYAML==6.0.3
+
+# Web configurator (src/configurator — FastAPI + Alpine.js)
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic==2.13.5
+
+# Optional, install on demand:
+#   boto3   — S3 artifact store (src/netos_build/store_s3.py)
+#   pytest  — test suite (src/tests)
